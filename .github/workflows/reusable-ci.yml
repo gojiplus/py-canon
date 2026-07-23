@@ -40,7 +40,7 @@ jobs:
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       - name: Sync environment
         run: |
-          if [ -f uv.lock ]; then uv sync --frozen --all-groups; else uv sync --all-groups; fi
+          if [ -f uv.lock ]; then uv sync --frozen --all-groups --all-extras; else uv sync --all-groups --all-extras; fi
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format
@@ -70,7 +70,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Sync environment
         run: |
-          if [ -f uv.lock ]; then uv sync --frozen --all-groups; else uv sync --all-groups; fi
+          if [ -f uv.lock ]; then uv sync --frozen --all-groups --all-extras; else uv sync --all-groups --all-extras; fi
       - name: Run tests
         env:
           COVERAGE_FLOOR: ${{ inputs.coverage-floor }}
