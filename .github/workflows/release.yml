@@ -13,3 +13,5 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    with:
+      publish-pypi: false  # py-canon is consumed via git; GitHub Release only

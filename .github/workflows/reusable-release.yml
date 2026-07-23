@@ -3,6 +3,10 @@ name: Reusable Release
 on:
   workflow_call:
     inputs:
+      publish-pypi:
+        description: 'Publish to (Test)PyPI (requires a trusted publisher configured)'
+        type: boolean
+        default: true
       testpypi:
         description: 'Publish to TestPyPI instead of PyPI'
         type: boolean
@@ -34,6 +38,7 @@ jobs:
           path: dist/
 
   publish:
+    if: inputs.publish-pypi
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -52,8 +57,11 @@ jobs:
           repository-url: ${{ inputs.testpypi && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
 
   github-release:
-    if: inputs.github-release && startsWith(github.ref, 'refs/tags/')
-    needs: publish
+    if: >-
+      !cancelled() && inputs.github-release && startsWith(github.ref, 'refs/tags/') &&
+      needs.build.result == 'success' &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    needs: [build, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
