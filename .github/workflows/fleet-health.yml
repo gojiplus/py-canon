@@ -20,7 +20,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Scan fleet CI status
         env:
           GH_TOKEN: ${{ github.token }}
@@ -36,7 +36,7 @@ jobs:
             fi
           done < FLEET
           if [ -n "$RED" ]; then
-            BODY=$(printf "Repos with failing default-branch CI as of %s:\n\n$RED\nSee STANDARD.md → CI failure playbook." "$(date -u +%F)")
+            BODY=$(printf "Repos with failing default-branch CI as of %s:\n\n%b\nSee STANDARD.md → CI failure playbook." "$(date -u +%F)" "$RED")
             EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --label fleet-health --state open --json number --jq '.[0].number // empty')
             if [ -n "$EXISTING" ]; then
               gh issue edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
@@ -44,7 +44,7 @@ jobs:
               gh label create fleet-health --repo "$GITHUB_REPOSITORY" --color D93F0B 2>/dev/null || true
               gh issue create --repo "$GITHUB_REPOSITORY" --title "Fleet health: failing CI" --label fleet-health --body "$BODY"
             fi
-            echo "RED repos found:"; printf "$RED"
+            echo "RED repos found:"; printf "%b" "$RED"
           else
             EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --label fleet-health --state open --json number --jq '.[0].number // empty')
             [ -n "$EXISTING" ] && gh issue close "$EXISTING" --repo "$GITHUB_REPOSITORY" --comment "Fleet is green as of $(date -u +%F)."

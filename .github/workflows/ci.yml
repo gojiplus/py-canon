@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Lint workflow files
         run: |
           curl -sL "$(curl -s https://api.github.com/repos/rhysd/actionlint/releases/latest | python3 -c 'import json,sys; assets=[a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if "linux_amd64" in a["browser_download_url"] and a["browser_download_url"].endswith(".tar.gz")]; print(assets[0])')" | tar xz actionlint
@@ -35,8 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v8.3.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       - name: Generate project from template
         run: |
           uvx copier copy --trust . /tmp/smoke-pkg \
@@ -58,3 +58,20 @@ jobs:
           uv run python -c "import smoke_pkg; assert smoke_pkg.__version__ == '0.1.0'"
           uv run sphinx-build -W -q -b html docs _site
           echo "template smoke test: full gate green"
+
+  promote:
+    name: Promote v1
+    # v1 is the fleet-facing moving tag; it only ever advances to a commit
+    # every CI job just validated. Rollback: push -f <sha>:refs/tags/v1
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [ci, actionlint, template-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Fast-forward v1
+        run: |
+          git tag -f v1 "$GITHUB_SHA"
+          git push -f origin v1
