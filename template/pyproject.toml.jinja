@@ -1,0 +1,84 @@
+[project]
+name = "{{ project_name }}"
+description = "{{ description }}"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "{{ author_name }}", email = "{{ author_email }}" }]
+requires-python = ">=3.11"
+dynamic = ["version"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/{{ org }}/{{ project_name }}"
+Documentation = "https://{{ org }}.github.io/{{ project_name }}/"
+Repository = "https://github.com/{{ org }}/{{ project_name }}"
+{% if needs_cli %}
+[project.scripts]
+{{ project_name }} = "{{ package_name }}.cli:main"
+{% endif %}
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ package_name }}"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14",
+    "pyright>=1.1.390",
+    "pydoclint>=0.5",
+    "pre-commit>=4",
+    { include-group = "test" },
+]
+test = ["pytest>=8", "pytest-cov>=6"]
+docs = [
+    "sphinx>=8",
+    "py-canon @ git+https://github.com/gojiplus/py-canon@v1",
+    "furo",
+    "myst-parser",
+    "sphinx-copybutton",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "N", "D", "S", "SIM", "T20", "PT", "RUF"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "D"]
+"docs/**" = ["D"]
+
+[tool.pyright]
+include = ["src"]
+typeCheckingMode = "standard"
+
+[tool.pydoclint]
+style = "google"
+exclude = "tests|docs"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.preen]

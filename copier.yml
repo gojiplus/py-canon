@@ -1,0 +1,44 @@
+_subdirectory: template
+_answers_file: .copier-answers.yml
+_min_copier_version: "9.0.0"
+
+project_name:
+  type: str
+  help: Distribution name (as on PyPI, e.g. my-package)
+
+package_name:
+  type: str
+  help: Import name (module under src/)
+  default: "{{ project_name | replace('-', '_') }}"
+
+org:
+  type: str
+  help: GitHub org/owner
+  default: gojiplus
+
+description:
+  type: str
+  help: One-line description
+
+author_name:
+  type: str
+  default: Gaurav Sood
+
+author_email:
+  type: str
+  default: gsood07@gmail.com
+
+needs_cli:
+  type: bool
+  help: Ship a console script?
+  default: false
+
+coverage_floor:
+  type: int
+  help: Coverage percent required in CI (0 disables)
+  default: 0
+
+default_branch:
+  type: str
+  help: Default branch name
+  default: main

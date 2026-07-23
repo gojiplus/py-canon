@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "{{ project_name }}"
+authors:
+  - family-names: "{{ author_name.split(' ')[-1] }}"
+    given-names: "{{ author_name.split(' ')[:-1] | join(' ') }}"
+repository-code: "https://github.com/{{ org }}/{{ project_name }}"
+license: MIT

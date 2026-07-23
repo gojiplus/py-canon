@@ -1,0 +1,71 @@
+name: Reusable Release
+
+on:
+  workflow_call:
+    inputs:
+      testpypi:
+        description: 'Publish to TestPyPI instead of PyPI'
+        type: boolean
+        default: false
+      github-release:
+        description: 'Create a GitHub Release with generated notes'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # dynamic versioning reads tags
+      - uses: astral-sh/setup-uv@v8
+      - name: Build distributions
+        run: uv build
+      - name: Check metadata
+        run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.testpypi && 'testpypi' || 'pypi' }}
+    permissions:
+      id-token: write  # trusted publishing + attestations
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: dist
+          path: dist/
+      - name: Publish (trusted publishing, PEP 740 attestations)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
+          repository-url: ${{ inputs.testpypi && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+
+  github-release:
+    if: inputs.github-release && startsWith(github.ref, 'refs/tags/')
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: dist
+          path: dist/
+      - name: Create GitHub Release with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" --generate-notes --verify-tag

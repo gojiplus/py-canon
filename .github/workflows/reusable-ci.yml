@@ -1,0 +1,131 @@
+name: Reusable CI
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        description: 'JSON array of Python versions to test'
+        type: string
+        default: '["3.11", "3.14"]'
+      os:
+        description: 'JSON array of runner images for the test matrix'
+        type: string
+        default: '["ubuntu-latest"]'
+      coverage-floor:
+        description: 'Fail tests below this coverage percent (0 disables)'
+        type: number
+        default: 0
+      run-pydoclint:
+        description: 'Run pydoclint in the lint job'
+        type: boolean
+        default: true
+      run-preen:
+        description: 'Run preen check --strict in the lint job'
+        type: boolean
+        default: false
+      wheel-import:
+        description: 'Import name to smoke-test from the built wheel (defaults to repo package auto-detect)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+      - name: Sync environment
+        run: |
+          if [ -f uv.lock ]; then uv sync --frozen --all-groups; else uv sync --all-groups; fi
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format
+        run: uv run ruff format --check .
+      - name: Pyright
+        run: uv run pyright
+      - name: Pydoclint
+        if: inputs.run-pydoclint
+        run: uv run pydoclint src/ || uv run pydoclint .
+      - name: Preen conformance
+        if: inputs.run-preen
+        run: uvx preen check --strict
+
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python-versions) }}
+        os: ${{ fromJSON(inputs.os) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Sync environment
+        run: |
+          if [ -f uv.lock ]; then uv sync --frozen --all-groups; else uv sync --all-groups; fi
+      - name: Run tests
+        env:
+          COVERAGE_FLOOR: ${{ inputs.coverage-floor }}
+        run: |
+          if [ "$COVERAGE_FLOOR" != "0" ]; then
+            uv run pytest --cov --cov-report=term-missing --cov-fail-under="$COVERAGE_FLOOR"
+          else
+            uv run pytest
+          fi
+
+  wheel:
+    name: Test built wheel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # dynamic versioning needs tags
+      - uses: astral-sh/setup-uv@v8
+      - name: Build
+        run: uv build
+      - name: Check metadata
+        run: uvx twine check dist/*
+      - name: Install wheel in clean env and test
+        env:
+          WHEEL_IMPORT: ${{ inputs.wheel-import }}
+        run: |
+          uv venv /tmp/wheelenv
+          . /tmp/wheelenv/bin/activate
+          uv pip install dist/*.whl
+          uv pip install --group test . 2>/dev/null || uv pip install pytest
+          import_name="$WHEEL_IMPORT"
+          if [ -z "$import_name" ]; then
+            import_name=$(basename src/*/ 2>/dev/null | head -1 | tr - _)
+          fi
+          python -c "import $import_name; print('import OK:', '$import_name')"
+          if [ -d tests ]; then python -m pytest tests/ -q; fi
+
+  workflow-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+      - name: Zizmor (Actions security lint)
+        run: uvx zizmor --min-severity high .github/workflows/
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

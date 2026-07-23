@@ -1,0 +1,62 @@
+name: Reusable Docs
+
+on:
+  workflow_call:
+    inputs:
+      docs-dir:
+        description: 'Sphinx source directory'
+        type: string
+        default: 'docs'
+      deploy:
+        description: 'Deploy to GitHub Pages (typically only on default-branch push)'
+        type: boolean
+        default: false
+      run-doctests:
+        description: 'Run sphinx doctest builder'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v8
+      - name: Sync docs environment
+        run: |
+          if [ -f uv.lock ]; then uv sync --frozen --group docs; else uv sync --group docs; fi
+      - name: Build HTML (warnings are errors)
+        env:
+          DOCS_DIR: ${{ inputs.docs-dir }}
+        run: uv run sphinx-build -W -b html "$DOCS_DIR" _site
+      - name: Doctests
+        if: inputs.run-doctests
+        env:
+          DOCS_DIR: ${{ inputs.docs-dir }}
+        run: uv run sphinx-build -b doctest "$DOCS_DIR" _doctest
+      - name: Upload Pages artifact
+        if: inputs.deploy
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    if: inputs.deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

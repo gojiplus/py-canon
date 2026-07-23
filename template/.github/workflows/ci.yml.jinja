@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [{{ default_branch }}]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: {% raw %}${{ github.workflow }}-${{ github.ref }}{% endraw %}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: gojiplus/py-canon/.github/workflows/reusable-ci.yml@v1
+    with:
+      wheel-import: {{ package_name }}
+      coverage-floor: {{ coverage_floor }}
