@@ -1,0 +1,52 @@
+name: Fleet health
+
+# Daily scan of every adopted repo's default-branch CI. Failures are
+# aggregated into a single pinned issue on this repo so red repos are
+# discovered centrally, not on the next visit.
+
+on:
+  schedule:
+    - cron: "42 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Scan fleet CI status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RED=""
+          while read -r repo; do
+            [ -z "$repo" ] && continue
+            branch=$(gh api "repos/$repo" --jq .default_branch 2>/dev/null) || continue
+            concl=$(gh api "repos/$repo/actions/runs?branch=$branch&per_page=10" \
+              --jq '[.workflow_runs[] | select(.name == "CI" or .name == "test" or .name == "ci")] | first | .conclusion // "none"' 2>/dev/null || echo unknown)
+            if [ "$concl" = "failure" ] || [ "$concl" = "startup_failure" ] || [ "$concl" = "timed_out" ]; then
+              RED="$RED- [ ] \`$repo\` — latest \`$branch\` CI: **$concl** (https://github.com/$repo/actions)\n"
+            fi
+          done < FLEET
+          if [ -n "$RED" ]; then
+            BODY=$(printf "Repos with failing default-branch CI as of %s:\n\n$RED\nSee STANDARD.md → CI failure playbook." "$(date -u +%F)")
+            EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --label fleet-health --state open --json number --jq '.[0].number // empty')
+            if [ -n "$EXISTING" ]; then
+              gh issue edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+            else
+              gh label create fleet-health --repo "$GITHUB_REPOSITORY" --color D93F0B 2>/dev/null || true
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "Fleet health: failing CI" --label fleet-health --body "$BODY"
+            fi
+            echo "RED repos found:"; printf "$RED"
+          else
+            EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --label fleet-health --state open --json number --jq '.[0].number // empty')
+            [ -n "$EXISTING" ] && gh issue close "$EXISTING" --repo "$GITHUB_REPOSITORY" --comment "Fleet is green as of $(date -u +%F)."
+            echo "Fleet green."
+          fi

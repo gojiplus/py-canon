@@ -96,3 +96,23 @@ Workflow hygiene baked into the shims/reusables: top-level
 `preen check --strict` runs in CI (part of the lint job) and fails a repo that
 drifts from the standard: template drift, stale generated files, structure
 violations, docstring gaps, dead links, CI-matrix mismatch.
+
+## CI failure playbook
+
+Prevention: canon changes are gated by canon's own CI (including a
+template-consumer smoke test and actionlint); the fleet-facing `v1` tag is
+advanced **only by the promote workflow after green CI** — never by hand.
+Breaking standard changes go to `v2`, not a mutated `v1`.
+
+Detection: every repo's CI runs weekly on cron (dormant repos surface
+ecosystem drift); the daily **fleet-health** workflow here scans every repo
+in `FLEET` and maintains a single "Fleet health" issue listing red repos.
+
+Response, by origin:
+1. **Canon-caused** (reusable workflow / template bug): fix in canon; the
+   promote workflow moves `v1`; the fleet heals with zero per-repo commits.
+2. **Ecosystem-caused** (action major, runner image, tool release): if it
+   lives in a shared workflow, same as (1). If per-repo, dependabot config.
+3. **Repo-specific** (real test failure): fix in the repo.
+
+Rollback (fleet-wide undo): `git push -f origin <last-good-sha>:refs/tags/v1`.

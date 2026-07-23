@@ -1,0 +1,32 @@
+name: Promote v1
+
+# Advance the moving v1 tag ONLY after CI is green on main.
+# The fleet consumes @v1, so v1 must never point at an untested commit.
+# Rollback: git push -f origin <last-good-sha>:refs/tags/v1
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Fast-forward v1 to the green commit
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git tag -f v1 "$SHA"
+          git push -f origin v1

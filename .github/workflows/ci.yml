@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "17 6 * * 1"  # weekly: catch ecosystem drift on a quiet repo
 
 permissions:
   contents: read
@@ -17,3 +19,42 @@ jobs:
     uses: ./.github/workflows/reusable-ci.yml
     with:
       wheel-import: py_canon
+
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint workflow files
+        run: |
+          curl -sL "$(curl -s https://api.github.com/repos/rhysd/actionlint/releases/latest | python3 -c 'import json,sys; assets=[a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if "linux_amd64" in a["browser_download_url"] and a["browser_download_url"].endswith(".tar.gz")]; print(assets[0])')" | tar xz actionlint
+          ./actionlint .github/workflows/*.yml template/.github/workflows/*.yml || ./actionlint .github/workflows/*.yml
+
+  template-smoke:
+    name: Template consumer smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.2
+      - name: Generate project from template
+        run: |
+          uvx copier copy --trust . /tmp/smoke-pkg \
+            -d project_name=smoke-pkg -d description="Smoke test package" \
+            -d needs_cli=true --defaults
+      - name: Run the full gate on the generated project
+        run: |
+          cd /tmp/smoke-pkg
+          git init -q && git add -A && git -c user.email=ci@local -c user.name=ci commit -qm init && git tag v0.1.0
+          # docs group references py-canon@v1 on GitHub; for the smoke test,
+          # point it at the local checkout being tested instead
+          sed -i "s|py-canon @ git+https://github.com/gojiplus/py-canon@v1|py-canon @ file://$GITHUB_WORKSPACE|" pyproject.toml
+          uv sync --all-groups
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+          uv run pytest -q
+          uv build
+          uv run python -c "import smoke_pkg; assert smoke_pkg.__version__ == '0.1.0'"
+          uv run sphinx-build -W -q -b html docs _site
+          echo "template smoke test: full gate green"
