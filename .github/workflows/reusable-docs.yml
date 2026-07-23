@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.3.2
       - name: Sync docs environment
         run: |
           if [ -f uv.lock ]; then uv sync --frozen --group docs; else uv sync --group docs; fi
