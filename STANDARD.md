@@ -57,6 +57,16 @@ change to every adopted repo.
   publish job lives in each repo's `release.yml` shim (template-managed);
   build and GitHub Release stay in the reusable workflow. Configure the
   PyPI publisher with workflow `release.yml`, environment `pypi`.
+- **Legacy publishers**: repos whose PyPI publisher predates adoption is
+  keyed to an old workflow filename (e.g. `publish.yml`, no environment,
+  on get-weather-data; `python-publish.yml`, environment `pypi`, on
+  indicate). Rather than requiring a pypi.org config change, those repos
+  strip the publish job from `release.yml` and keep a standalone publish
+  workflow under the legacy filename with exactly the claims the
+  publisher expects. Caveat: a future `copier update` restores the
+  template `release.yml` (with its embedded publish job) — drop that job
+  again when reconciling, or migrate the publisher config to
+  `release.yml`/`pypi` and delete the legacy file.
 - CHANGELOG is the generated release notes; curate in the GitHub Release when
   it matters.
 
