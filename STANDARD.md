@@ -53,6 +53,10 @@ change to every adopted repo.
 - Pushing tag `vX.Y.Z` runs the release workflow: build → PEP 740
   attestations → **PyPI trusted publishing** (OIDC, no tokens) → GitHub
   Release with generated notes.
+- PyPI's trusted publishing does not support reusable workflows, so the
+  publish job lives in each repo's `release.yml` shim (template-managed);
+  build and GitHub Release stay in the reusable workflow. Configure the
+  PyPI publisher with workflow `release.yml`, environment `pypi`.
 - CHANGELOG is the generated release notes; curate in the GitHub Release when
   it matters.
 

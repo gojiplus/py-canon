@@ -4,9 +4,14 @@ on:
   workflow_call:
     inputs:
       publish-pypi:
-        description: 'Publish to (Test)PyPI (requires a trusted publisher configured)'
+        # PyPI trusted publishing does NOT support reusable workflows —
+        # the OIDC claims reference this file, not the caller's. Leave
+        # this false and put the publish job in the caller's release.yml
+        # (the template ships it); this job remains for token-based or
+        # future use.
+        description: 'Publish to (Test)PyPI from this reusable workflow'
         type: boolean
-        default: true
+        default: false
       testpypi:
         description: 'Publish to TestPyPI instead of PyPI'
         type: boolean
