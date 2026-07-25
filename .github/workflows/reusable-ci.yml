@@ -128,3 +128,24 @@ jobs:
         with:
           fail-on-severity: high
           comment-summary-in-pr: never
+
+  # One stable context for rulesets to require, so the matrix can change
+  # without silently orphaning a required check. Naming a matrix leg directly
+  # in a ruleset is how naampy and outkast ended up requiring contexts that no
+  # longer existed: every PR sat BLOCKED with no visible failure.
+  # `if: always()` so a skipped or failed upstream job still reports here.
+  gate:
+    name: gate
+    if: always()
+    needs: [lint, test, wheel, workflow-security, dependency-review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Assert no upstream job failed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$RESULTS"
+          # 'skipped' is legitimate -- dependency-review only runs on PRs.
+          printf '%s\n' "$RESULTS" \
+            | jq -e 'all(.[].result; . == "success" or . == "skipped")'
