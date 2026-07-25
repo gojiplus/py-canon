@@ -100,9 +100,29 @@ Workflow hygiene baked into the shims/reusables: top-level
 ## Repo operations
 
 - Dependabot: weekly grouped patch/minor with 7-day cooldown; guarded
-  auto-merge (Python majors are the only human-reviewed updates).
+  auto-merge (Python majors are the only human-reviewed updates). A major
+  *security* bump is also held for a human — grouped security PRs report the
+  group name, not `minor-and-patch`, so they do not clear the gate.
+- **Auto-merge never approves.** `gh pr review --approve` fails outright where
+  an org disallows Actions approving PRs, and `run:` uses `bash -e`, so the
+  merge line never executes. The rulesets require status checks, not reviews,
+  so the approval bought nothing. GitHub's documented example does not approve
+  either. Do not add it back.
+- **Pages concurrency is keyed on the ref.** A constant `group: pages` on a
+  workflow that also triggers on `pull_request` is a trap: GitHub cancels the
+  pending run in a group when a new one queues, so a burst of Dependabot PRs
+  leaves all but the last with no `build` check. If `build` is required, those
+  PRs are blocked forever with no visible failure. Use
+  `group: docs-${{ github.ref }}`.
+- **Required contexts must match the contexts CI actually emits.** Naming
+  matrix legs in a ruleset means the next matrix change silently orphans a
+  required check and blocks every PR. Require the aggregate `ci / gate`
+  context instead. Audit with `tools/dependabot_backfill.py`, which reports
+  contexts that never report on any open PR.
 - Ruleset on the default branch: CI checks required for PR merges; repo-admin
   bypass for direct pushes.
+- A repo with **no** ruleset must not have auto-merge enabled: auto-merge with
+  nothing required is a merge button on a timer.
 - Org-level `.github` repos carry community health files (SECURITY.md,
   CONTRIBUTING.md, issue templates).
 - Repo metadata (description, topics, homepage → docs URL) is set at adoption.
