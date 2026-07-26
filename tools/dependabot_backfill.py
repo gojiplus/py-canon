@@ -27,12 +27,14 @@ RANK = {
 }
 UNRANK = {v: k for k, v in RANK.items()}
 
-BUMPS = re.compile(r"^Bumps .* from (?P<a>v?\d[^ ]*) to (?P<b>v?\d[^ ]*)\.", re.M)
+BUMPS = re.compile(
+    r"^Bumps .* from (?P<a>v?\d[^ ]*) to (?P<b>v?\d[^ ]*)\.", re.MULTILINE
+)
 REQ = re.compile(
     r"[Uu]pdate .* requirement from \S*?(?P<a>v?\d\S*) to \S*?(?P<b>v?\d\S*)"
 )
-UPDATE_TYPE = re.compile(r"^\s*update-type:\s*(\S+)", re.M)
-DEP_GROUP = re.compile(r"^\s*dependency-group:\s*(\S+)", re.M)
+UPDATE_TYPE = re.compile(r"^\s*update-type:\s*(\S+)", re.MULTILINE)
+DEP_GROUP = re.compile(r"^\s*dependency-group:\s*(\S+)", re.MULTILINE)
 
 
 def gh(*args, parse=True):

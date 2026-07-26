@@ -58,14 +58,22 @@ target-version = "py311"
 
 [tool.ruff.lint]
 external = ["DOC"]
-select = ["E", "W", "F", "I", "B", "C4", "UP", "N", "D", "S", "SIM", "T20", "PT", "RUF"]
-ignore = ["D203", "D213"]
+select = [
+    "E", "W", "F", "I", "B", "C4", "UP", "N", "D", "S", "SIM", "T20", "PT", "RUF",
+    "PTH", "RET", "PIE", "FURB", "PERF", "DTZ", "LOG", "G", "TC", "FLY",
+    "RSE", "SLOT", "FA", "A", "EXE", "ICN", "PGH", "PLE", "ARG", "SLF",
+]
+# D203/D213: the google convention this standard picks. W191/D206/D300:
+# ruff's own docs list these as always incompatible with `ruff format`,
+# which the standard also runs.
+ignore = ["D203", "D213", "W191", "D206", "D300"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "D"]
+# Unused fixture arguments and private-member access are how tests are written.
+"tests/**" = ["S101", "D", "ARG", "SLF"]
 "docs/**" = ["D"]
 
 [tool.pyright]
