@@ -15,7 +15,7 @@ on their next docs build after a lock refresh.
 from __future__ import annotations
 
 import tomllib
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -71,7 +71,9 @@ def configure(
     namespace.update(
         project=project,
         author=authors,
-        copyright=f"{date.today().year}, {authors}",
+        # Explicitly zoned so ruff's DTZ rules are satisfied; the copyright
+        # year should track the builder's local date, not UTC's.
+        copyright=f"{datetime.now().astimezone().year}, {authors}",
         version=version,
         release=version,
         extensions=[

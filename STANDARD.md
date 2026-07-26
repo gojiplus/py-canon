@@ -22,8 +22,17 @@ change to every adopted repo.
   `uv_build` because tag-derived versions (below) require a plugin-capable
   backend, and no-bump-commits outranks backend minimalism.
 - **ruff** is the only linter and formatter. Line length 88. Lint select:
-  `E, W, F, I, B, C4, UP, N, D, S, SIM, T20, PT, RUF`; pydocstyle convention
-  **google**. No black, no isort, no flake8.
+  `E, W, F, I, B, C4, UP, N, D, S, SIM, T20, PT, RUF, PTH, RET, PIE, FURB,
+  PERF, DTZ, LOG, G, TC, FLY, RSE, SLOT, FA, A, EXE, ICN, PGH, PLE, ARG,
+  SLF` — about half of ruff's stable rules, skewed to the auto-fixable ones;
+  pydocstyle convention **google**. `ARG`/`SLF` are off under `tests/**`.
+  Ignored: `D203, D213` (the google convention's own exclusions) and
+  `W191, D206, D300` (ruff documents these as always incompatible with
+  `ruff format`, which this standard also runs). No black, no isort, no
+  flake8.
+  Framework-specific sets (`PD`, `NPY`, `ASYNC`, `DJ`, …) are deliberately
+  left to individual repos; `preen adopt` preserves a repo's own
+  `extend-select` rather than overwriting it.
 - **pyright** (`standard` mode) is the only type checker. No mypy.
 - **pydoclint** (google style) for docstring–signature consistency, which
   ruff's `D` rules don't check.
