@@ -58,6 +58,13 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    # The only job that runs on the caller's matrix, so the only one that can
+    # land on Windows, where the default shell is PowerShell and the POSIX
+    # conditionals below fail to parse. Windows runners ship Git Bash, so
+    # pinning the shell makes one script work on every runner.
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
