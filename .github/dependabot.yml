@@ -33,3 +33,23 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  # The scaffolding copied into each new repo pins third-party actions by SHA
+  # of its own, and "/" does not reach it -- Dependabot resolves the ecosystem
+  # relative to each directory it is given. Without this entry those pins are
+  # frozen at whatever was current the day the template was written, and every
+  # repo generated afterwards inherits them. The .jinja siblings need no entry:
+  # they reference only this repo's reusable workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/template"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    groups:
+      template-actions-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
