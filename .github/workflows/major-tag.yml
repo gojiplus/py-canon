@@ -1,0 +1,84 @@
+name: Move major tag
+
+# The fleet pins these reusable workflows as @v1, so v1 is what every downstream
+# repo actually executes. Nothing moved it: Dependabot could bump an action here,
+# the bump could merge to main, and no repo in the fleet would ever see it --
+# v1 sat two commits behind main with no automation to advance it.
+#
+# This is the convention actions/checkout uses for its own major tags: cut a
+# semver release tag, and the major alias follows it.
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      major:
+        description: "Major tag to move (e.g. v1)"
+        required: true
+        default: "v1"
+
+permissions:
+  contents: write
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Every value below reaches the shell through env rather than through
+      # ${{ }} interpolation: inputs.major is attacker-controllable on a
+      # workflow_dispatch, and splicing it into a run block would execute it.
+      - name: Resolve the major tag and its target
+        id: resolve
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_MAJOR: ${{ inputs.major }}
+          TARGET: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "push" ]; then
+            major="${REF_NAME%%.*}"
+          else
+            major="$INPUT_MAJOR"
+          fi
+          case "$major" in
+            v[0-9]|v[0-9][0-9]) ;;
+            *) echo "::error::'$major' is not a major tag like v1"; exit 1 ;;
+          esac
+          printf 'major=%s\n' "$major" >> "$GITHUB_OUTPUT"
+          printf 'target=%s\n' "$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to publish a commit that is not on the default branch
+        env:
+          TARGET: ${{ steps.resolve.outputs.target }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          # A major tag is consumed by every repo in the fleet. Moving it to a
+          # commit that never landed on the default branch would ship code that
+          # bypassed review, so this is the one guard worth having.
+          if ! git merge-base --is-ancestor "$TARGET" "origin/$DEFAULT_BRANCH"; then
+            echo "::error::$TARGET is not an ancestor of $DEFAULT_BRANCH"
+            exit 1
+          fi
+
+      - name: Move the major tag
+        env:
+          MAJOR: ${{ steps.resolve.outputs.major }}
+          TARGET: ${{ steps.resolve.outputs.target }}
+        run: |
+          set -euo pipefail
+          before="$(git rev-parse -q --verify "refs/tags/$MAJOR" || echo none)"
+          git tag -f "$MAJOR" "$TARGET"
+          git push -f origin "refs/tags/$MAJOR"
+          {
+            printf '### `%s` moved\n\n' "$MAJOR"
+            printf -- '- from: `%s`\n' "$before"
+            printf -- '- to:   `%s`\n' "$TARGET"
+          } >> "$GITHUB_STEP_SUMMARY"
