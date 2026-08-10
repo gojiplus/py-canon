@@ -124,8 +124,42 @@ jobs:
       # aborted the step before the merge ever ran. Our rulesets require status
       # checks, not reviews, and GitHub's own documented example does not
       # approve either.
+      # GitHub's auto-merge waits for *required* status checks and nothing
+      # else. Where a repository requires none there is nothing to wait for, so
+      # `--auto` merges on the spot -- green, red, or still running.
+      #
+      # Measured: finite-sample/alsgls#37 was armed here and merged four
+      # minutes later carrying `FAILURE test (3.12)` and two cancelled legs. It
+      # took a ruff 0.7 -> 0.16 bump onto main and left the branch failing
+      # `ruff format --check` for hours. Nothing reported it, because a push
+      # made with GITHUB_TOKEN does not trigger workflows, so no CI ran on the
+      # merge commit either.
+      #
+      # So arm only where arming means something. Everywhere else the sweep
+      # below does the merging, and it requires every check terminal and none
+      # failed. Up to three hours slower, and correct.
+      - name: Check whether anything is actually required
+        id: required
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${GH_REPO}/rulesets" --jq '.[].id' 2>/dev/null \
+            | while read -r id; do
+                gh api "repos/${GH_REPO}/rulesets/${id}" --jq \
+                  '.rules[]? | select(.type=="required_status_checks")
+                   | .parameters.required_status_checks[].context' 2>/dev/null
+              done | sort -u > required.txt || true
+          count=$(wc -l < required.txt | tr -d ' ')
+          echo "required contexts: $(tr '\n' ' ' < required.txt)"
+          if [ "$count" = "0" ]; then
+            echo "::warning::no required status checks on this repository, so \
+            GitHub auto-merge would merge regardless of CI. Leaving this PR to \
+            the scheduled sweep, which waits for checks to finish and pass."
+          fi
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
       - name: Enable auto-merge for eligible updates
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.required.outputs.count != '0'
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
