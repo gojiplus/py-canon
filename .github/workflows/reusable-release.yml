@@ -98,6 +98,12 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           attestations: true
+          # Matches the template's publish step. This path is reachable only via
+          # publish-pypi: true, which defaults false because trusted publishing
+          # cannot bind its OIDC claims to a reusable workflow -- but leaving the
+          # two publish steps saying different things is exactly how their action
+          # pins came to be two months apart.
+          skip-existing: true
           repository-url: ${{ inputs.testpypi && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
 
   github-release:
