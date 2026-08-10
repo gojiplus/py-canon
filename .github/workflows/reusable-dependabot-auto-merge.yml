@@ -164,22 +164,49 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if err=$(gh pr merge --auto --squash "$PR_URL" 2>&1); then
-            printf '%s\n' "$err"
-            exit 0
-          fi
+          err=$(gh pr merge --auto --squash "$PR_URL" 2>&1) && { printf '%s\n' "$err"; exit 0; }
+          status=$?
           printf '%s\n' "$err"
-          # GitHub refuses to arm auto-merge on a PR it currently considers
-          # mergeable, and this job finishes in seconds -- often before the
-          # required check runs exist. Do not merge directly here: "clean" at
-          # t+4s does not mean the checks passed. The scheduled sweep picks it
-          # up once the checks are terminal, which is the safe moment.
+          # Separate "the tool is broken" from "GitHub said no", because the
+          # rest of this step deliberately swallows the second. Without this a
+          # missing or unauthenticated gh would fall through to the catch-all
+          # below and report success, which is the failure mode this whole
+          # change exists to remove -- just relocated.
+          if [ "$status" -eq 127 ] || printf '%s' "$err" | grep -qiE "not logged into|authentication failed|gh: command not found"; then
+            echo "::error::gh itself failed (exit ${status}). This is a malfunction, not a declined merge."
+            exit 1
+          fi
+          # A merge GitHub declined is an outcome, not a malfunction, and this
+          # step must never turn one into a failing check.
+          #
+          # It used to, and the result was a closed loop. onlinerake#5 bumped
+          # codecov-action, which lives inside .github/workflows/tests.yml. The
+          # PR was already passing, so GitHub refused to arm it -- nothing left
+          # to wait for -- and `--auto` fell through to merging on the spot,
+          # which GitHub also refused, because this token may not edit workflow
+          # files. That is not configurable: `workflows` is not among the
+          # permissions a workflow can request. The step did not recognise the
+          # message, exited 1, and the red job became a check on the PR. The
+          # sweep below then read that failure as a failing check and declined
+          # to touch it. One run, stuck for good.
+          #
+          # Worth knowing before anyone "fixes" this by requesting a permission
+          # that does not exist: *arming* a workflow-file PR is fine, because
+          # GitHub performs that merge itself. Only merging directly is
+          # refused. So these merge themselves whenever they are armed before
+          # their checks finish, and need a person only when they were already
+          # green by the time we looked.
           case "$err" in
             *"clean status"*|*"not mergeable"*|*"Auto merge is not allowed"*)
-              echo "::warning::auto-merge not armable yet; the sweep will retry"
-              exit 0 ;;
+              echo "::warning::auto-merge not armable yet; the sweep will retry" ;;
+            *"workflows"*"permission"*)
+              echo "::warning::${PR_URL} edits a workflow file, which this token may not merge. Needs a human; nothing here is broken." ;;
+            *)
+              echo "::warning::merge declined, reason not recognised; leaving the PR open. Message above." ;;
           esac
-          exit 1
+          # Unconditional on purpose: everything reaching here is GitHub
+          # declining, which is an outcome. Malfunctions were caught above.
+          exit 0
 
       - name: Flag ineligible updates for manual review
         if: steps.gate.outputs.eligible != 'true' && github.event.action == 'opened'
@@ -335,16 +362,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Same rule as the classify job: a declined merge is reported, never
+          # raised. These were already non-fatal; what they lacked was a reason.
+          # "could not merge #5" reads as a broken sweep, when the actual state
+          # is a PR that no token of ours can merge and a person must.
+          explain() {
+            case "$2" in
+              *"workflows"*"permission"*)
+                echo "::warning::#$1 edits a workflow file, which this token may not merge. Needs a human; the sweep is working." ;;
+              *)
+                echo "::warning::could not $3 #$1: $2" ;;
+            esac
+          }
           acted=0
           while IFS=$'\t' read -r n act _rest; do
             case "$act" in
               arm)
                 echo "arming #$n"
-                gh pr merge "$n" --auto --squash || echo "::warning::could not arm #$n"
+                out=$(gh pr merge "$n" --auto --squash 2>&1) || explain "$n" "$out" arm
                 acted=$((acted + 1)) ;;
               merge)
                 echo "merging #$n"
-                gh pr merge "$n" --squash --delete-branch || echo "::warning::could not merge #$n"
+                out=$(gh pr merge "$n" --squash --delete-branch 2>&1) || explain "$n" "$out" merge
                 acted=$((acted + 1)) ;;
             esac
           done < actions.txt
