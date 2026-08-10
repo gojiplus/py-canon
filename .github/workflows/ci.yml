@@ -26,9 +26,27 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Lint workflow files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -sL "$(curl -s https://api.github.com/repos/rhysd/actionlint/releases/latest | python3 -c 'import json,sys; assets=[a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if "linux_amd64" in a["browser_download_url"] and a["browser_download_url"].endswith(".tar.gz")]; print(assets[0])')" | tar xz actionlint
-          ./actionlint .github/workflows/*.yml template/.github/workflows/*.yml || ./actionlint .github/workflows/*.yml
+          set -euo pipefail
+          # Authenticated, and checked. Unauthenticated api.github.com is rate
+          # limited per runner IP, so this call returned a rate-limit body
+          # instead of a release, python raised KeyError: 'assets', and the
+          # empty URL was piped into tar -- which failed with "Error is not
+          # recoverable" and buried the actual cause. The job had been red on
+          # main for days, and because actionlint is a required context it was
+          # holding armed Dependabot PRs at BLOCKED: #14 and #15 were both
+          # waiting on it. A download that can fail silently must not be the
+          # thing a required check depends on.
+          url=$(gh api repos/rhysd/actionlint/releases/latest \
+            --jq '.assets[] | select(.name | test("linux_amd64\\.tar\\.gz$")) | .browser_download_url')
+          if [ -z "$url" ]; then
+            echo "::error::could not resolve an actionlint release asset"
+            exit 1
+          fi
+          curl -sSfL "$url" | tar xz actionlint
+          ./actionlint .github/workflows/*.yml template/.github/workflows/*.yml
 
   template-smoke:
     name: Template consumer smoke test
