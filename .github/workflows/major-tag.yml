@@ -77,6 +77,9 @@ jobs:
           before="$(git rev-parse -q --verify "refs/tags/$MAJOR" || echo none)"
           git tag -f "$MAJOR" "$TARGET"
           git push -f origin "refs/tags/$MAJOR"
+          # shellcheck disable=SC2016
+          # The single quotes are deliberate: these are printf format strings,
+          # so %s and the markdown backticks must reach printf unexpanded.
           {
             printf '### `%s` moved\n\n' "$MAJOR"
             printf -- '- from: `%s`\n' "$before"
