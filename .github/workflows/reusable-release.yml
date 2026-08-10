@@ -20,12 +20,51 @@ on:
         description: 'Create a GitHub Release with generated notes'
         type: boolean
         default: true
+      run-tests:
+        # A PyPI upload cannot be withdrawn, so the suite runs against the
+        # exact commit being published rather than trusting that CI saw it.
+        # It usually did -- but "usually" is doing real work in that sentence:
+        # a tag can point at a commit pushed straight to the default branch, at
+        # an older commit, or at one whose CI run was cancelled, and none of
+        # those look any different from here.
+        #
+        # Costs one test run per release, which happens a few times a year.
+        description: 'Run the test suite before building (strongly recommended)'
+        type: boolean
+        default: true
+      test-python-version:
+        description: 'Python version for the pre-release test run'
+        type: string
+        default: '3.12'
 
 permissions:
   contents: read
 
 jobs:
+  test:
+    if: inputs.run-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: ${{ inputs.test-python-version }}
+      # Same sync as reusable-ci's test job, so a release runs what CI runs.
+      - name: Sync environment
+        run: |
+          if [ -f uv.lock ]; then uv sync --frozen --all-groups --all-extras; else uv sync --all-groups --all-extras; fi
+      - name: Run tests
+        run: uv run pytest
+
   build:
+    needs: test
+    # `needs` on a job that can be skipped would skip this one too, so state
+    # the condition rather than inheriting it: build whenever the tests either
+    # passed or were deliberately not run.
+    if: >-
+      !cancelled() &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
