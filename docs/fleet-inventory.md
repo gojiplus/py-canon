@@ -6,33 +6,36 @@ means before migrating anything.
 ## The numbers
 
 Across six orgs — `gojiplus`, `finite-sample`, `appeler`, `in-rolls`, `notnews`, `themains` —
-**282 non-archived, non-fork repositories**, of which **67 are packages** (65 carry a
-`pyproject.toml`, 2 still use `setup.py`).
+**282 non-archived, non-fork repositories**. Of those, **67 carry packaging metadata** (65 a
+`pyproject.toml`, 2 a `setup.py`) — but that is a weak test, and the number it produces is
+misleading.
 
-Adoption among those 67:
+**Carrying a `pyproject.toml` does not make something a package.** Analyses and apps use one to
+pin dependencies. The load-bearing question is whether the thing is *published*:
+
+| | repos |
+|---|--:|
+| on PyPI — real, distributed packages | **47** |
+| packaging metadata but not published | 20 |
+
+Several of the 20 are plainly not packages on inspection: `in-rolls/assam_elex_rolls_2026` is
+electoral-roll dataset work, `notnews/bench_marks` is a benchmark harness. Others are genuine
+packages that simply have not shipped yet — `gojiplus/py-canon` and `finite-sample/simcheck`
+among them. The 20 need a per-repo judgement rather than a rule.
+
+Adoption among the **47 published** packages:
 
 | state | repos |
 |---|--:|
-| canon CI **and** template-adopted | 17 |
-| canon CI only | 2 |
-| **neither** | **48** |
+| on canon CI | 15 |
+| **not on canon CI — the backlog** | **32** |
 
 `FLEET` lists 26. All 26 appear in the scan, which is the check that matters — the scan is a
-strict superset of the known-good list. But **41 packages are not in `FLEET` at all**, so the
-file undercounts by roughly two-thirds.
+strict superset of the known-good list. But it mixes published and unpublished repos and misses
+many of the 47.
 
-The 48-repo backlog, by last push and by org:
-
-| last push | repos | | org | repos |
-|---|--:|---|---|--:|
-| 2026 | 40 | | finite-sample | 21 |
-| 2025 | 7 | | gojiplus | 12 |
-| 2020 | 1 | | in-rolls | 6 |
-| | | | appeler | 6 |
-| | | | notnews | 3 |
-
-Forty of the forty-eight were pushed this year, so this is a live backlog rather than an archive
-of abandoned work.
+The 32-repo backlog is live rather than abandoned: the overwhelming majority were pushed this
+year, and it is concentrated in `finite-sample` and `gojiplus`.
 
 ## What the other 215 repos are
 
@@ -44,10 +47,29 @@ Not packages, and mostly should not be forced into a package standard:
 | apps | `requirements.txt` and an entry point such as `app.py` |
 | **GitHub Actions** | `action.yml` / `action.yaml` at the root |
 
-The Actions are the interesting category. They are Python, they are maintained, and py-canon's
-standard does not fit them — there is no wheel to build, nothing to publish to PyPI, and the
-release workflow has nothing to release. **They are the first real candidates for an exemption
-tier** rather than for migration.
+The Actions are worth naming separately. They are Python and maintained, but there is no wheel to
+build and nothing to publish, so the package standard simply does not apply. **Out of scope, not
+exempt** — an earlier draft called them exemption-tier candidates, which implied they were things
+we had decided not to migrate. They were never migration candidates.
+
+The exemption tier is for a narrower thing: repos that genuinely *are* published packages but
+cannot take the standard. `finite-sample/rmcp` is the case — its CI builds a Docker image and runs
+R integration tests inside it, and the template's `ci.yml` would delete that.
+
+### Five more that are not packages, despite carrying pyproject.toml
+
+Found by checking for importable code rather than trusting the manifest:
+
+| repo | declared name | what it is |
+|---|---|---|
+| `appeler/clean-names` | clean-names | two loose scripts; `find_packages()` returns nothing, so its `setup.py` builds an empty distribution. Not on PyPI under any spelling. Untouched since 2020 |
+| `in-rolls/mplads` | mplads | MPLADS analysis. `analysis/00_descriptive_stats.py`, `01_merge_election_mplads.py` — a numbered research pipeline. Declares `packages = ["src"]`, but `src/` has no `__init__.py` |
+| `in-rolls/pai` | pai-scraper | Panchayat Advancement Index scraper — `scripts/pai_scraper_resumable.py` |
+| `notnews/bench_marks` | rule-of-blah | judicial-coverage analysis — `scripts/analyze_judicial_coverage.py` |
+| `finite-sample/ensemble-proximity` | stable-selection | no importable package; declared name does not match the repo |
+
+Each has **zero `__init__.py`**. The `pyproject.toml` is doing dependency management for `uv`, not
+declaring something to distribute. Scraping and academic work, correctly out of scope.
 
 ## Two errors in producing this, and how they surfaced
 
@@ -84,23 +106,26 @@ true.
 
 | tier | what | count |
 |---|---|--:|
-| **adopt** | packages not yet on the standard | 48 |
-| **complete** | on canon CI, template adoption not finished | 2 |
-| **done** | canon CI and template | 17 |
-| **exempt, with a reason** | GitHub Actions; anything whose CI the template would destroy | tbd |
-| **out of scope** | scripts, analyses, apps | the remaining ~215 |
+| **adopt** | published packages not yet on canon CI | **32** |
+| **done** | published and on canon CI | 15 |
+| **judgement needed** | importable, not published — ship them or reclassify | 15 |
+| **exempt, with a reason** | published packages the template would break — `rmcp` | 1 known |
+| **out of scope** | scripts, analyses, apps, Actions, and the 5 above | ~220 |
 
-`rmcp` is the worked example for the exemption tier: it is a package, but its CI builds a Docker
-image and runs R integration tests inside it, and the template's `ci.yml` would delete that.
+The 32 is the real backlog. Everything else is either already done, a decision about whether a
+thing is meant to be published at all, or not a package.
 
 ## Before migrating
 
-1. **Extend `FLEET` to all 67.** It drives `fleet-health.yml`, which currently watches 26 and is
-   blind to 41 packages.
-2. **Convert the two `setup.py` packages** — `finite-sample/pysum`, `appeler/clean-names` — to
-   `pyproject.toml` first. `preen adopt` rewrites `[tool.*]` sections and assumes the file exists.
+1. **Extend `FLEET` to the 47 published packages.** It drives `fleet-health.yml`, which currently
+   watches 26 — a list that mixes published and unpublished repos.
+2. **Convert `finite-sample/pysum` off `setup.py`.** Done (`finite-sample/pysum#1`); `preen adopt`
+   rewrites `[tool.*]` sections and assumes `pyproject.toml` exists. `appeler/clean-names` was the
+   other `setup.py` repo and is **not** being converted — it has no importable code to package.
 3. **Decide the exemption tier**, so a repo that cannot conform is recorded with a reason rather
    than sitting permanently red.
+4. **Settle the 15 unpublished-but-importable repos.** Each is either a package that has not
+   shipped yet or an analysis wearing packaging metadata, and only you can say which.
 
 Batch smallest-first by org so an adoption bug costs one small repo rather than twenty. `appeler`
 and `notnews` are the smallest backlogs and the natural place to find out what `preen adopt` gets
