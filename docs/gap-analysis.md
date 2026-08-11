@@ -20,26 +20,37 @@ Every external claim links to its source. Every claim about this repo names a fi
 
 ## 1. Where py-canon is behind
 
-### 1.1 Python floor is a year stale — the only urgent item
+### 1.1 Python floor — a choice to record, not a gap to close
 
 `STANDARD.md:43` requires `requires-python = ">=3.11"` with no upper bound, and `:44` says CI
 tests floor and ceiling, "3.11 and 3.14 today".
 
-[SPEC 0](https://scientific-python.org/specs/spec-0000/) drops a Python version **three years
-after release**:
+[SPEC 0](https://scientific-python.org/specs/spec-0000/) — the policy NumPy, SciPy, pandas and
+scikit-learn follow — says a project may stop supporting a Python version **three years after it
+was released**. The cost it is trading away is real: every supported version is another CI leg and
+another set of language features you cannot use.
 
-| version | released | droppable under SPEC 0 |
+| version | released | may be dropped under SPEC 0 |
 |---|---|---|
-| 3.11 | Oct 2022 | **Oct 2025 — passed** |
+| 3.11 | Oct 2022 | Oct 2025 — passed |
 | 3.12 | Oct 2023 | Oct 2026 |
 | 3.13 | Oct 2024 | Oct 2027 |
 | 3.14 | Oct 2025 | Oct 2028 |
 
-So the floor is one version behind the ecosystem it lives in. Raising it to `>=3.12` is not a
-loosening; it is catching up, and it comes with a schedule rather than a judgement call — 3.12
-itself becomes droppable in Oct 2026.
+**SPEC 0 grants permission, not an obligation.** So supporting 3.11 today is not a defect — it is
+a deliberate choice to serve users the wider ecosystem has stopped serving. An earlier draft of
+this document called the floor "stale" and recommended raising it; that framing was wrong, and it
+is corrected here rather than quietly deleted.
 
-**Recommend: adopt, as `v2`.** Measured across the 26 repos in `FLEET`:
+**The decision: keep `>=3.11` as the requirement, prefer 3.12.** That distinction needs to survive
+into the files, or it will be re-argued every time someone reads SPEC 0:
+
+- `requires-python = ">=3.11"` stays the floor a repo must not go below.
+- 3.12 becomes what the **template generates** for a new package, and what the docs recommend
+  when a maintainer has no reason to support 3.11.
+- The CI matrix keeps testing the floor and the ceiling, because the floor is what is promised.
+
+Measured across the 26 repos in `FLEET`, this is also the lower-friction reading:
 
 | declared `requires-python` | repos |
 |---|--:|
@@ -47,11 +58,12 @@ itself becomes droppable in Oct 2026.
 | `>=3.12` | 6 |
 | `>=3.13` | 2 |
 
-So raising the floor makes **18 of 26 non-conformant until each bumps its own
-`requires-python`** — not a free change, and firmly a `v2` one. Two things follow. It cannot be
-bundled with the migration, or every adoption PR grows a second unrelated argument. And the eight
-repos already at 3.12+ show the fleet drifting upward on its own, which is an argument for
-ratifying the direction rather than forcing the pace.
+Had the floor been raised, **18 of 26 would have gone non-conformant** until each bumped — a large
+bill for a change nobody needed. Recording a preference costs nothing and leaves those 18 alone,
+while the 8 already at 3.12+ show the fleet moving that way of its own accord.
+
+**Recommend: no `v2` needed.** Preference is documentation; only a raised floor would have been
+breaking.
 
 ### 1.2 pre-commit is shipped but never checked
 
@@ -135,8 +147,9 @@ be treated as a gap.
 
 ## 4. What this implies for the migration
 
-1. **Settle the floor first.** §1.1 changes what "conformant" means, so raising it after adopting
-   ~100 repos would mean touching them twice.
+1. **The floor is settled and does not block anything.** `>=3.11` stays; 3.12 is a preference
+   expressed in the template and the docs. Nothing to sequence around, and no repo goes
+   non-conformant.
 2. **Add the cheap presence checks before the inventory**, not after. They are exactly what
    distinguishes a real package from an abandoned script among the ~77 untracked repos.
 3. **Do not add a task runner as part of the migration.** It is the one item here that is a
