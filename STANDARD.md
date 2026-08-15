@@ -108,10 +108,20 @@ Workflow hygiene baked into the shims/reusables: top-level
 
 ## Repo operations
 
-- Dependabot: weekly grouped patch/minor with 7-day cooldown; guarded
-  auto-merge (Python majors are the only human-reviewed updates). A major
-  *security* bump is also held for a human — grouped security PRs report the
-  group name, not `minor-and-patch`, so they do not clear the gate.
+- Dependabot: weekly grouped patch/minor with 7-day cooldown. **Everything
+  Dependabot opens is eligible to auto-merge; CI decides whether it lands.**
+  The sweep merges only when every check is terminal and none failed.
+  - This used to hold Python majors for a human, and — because grouped security
+    PRs report the group name rather than `minor-and-patch` — held major
+    *security* bumps too. That inverted the risk: the updates most worth
+    landing fast were the least likely to merge. Measured before changing it:
+    57 open Dependabot PRs across the fleet, 37 of them green and unmerged, and
+    `in-rolls/indicate` sitting on eight dependencies with published security
+    fixes.
+  - What makes this safe is not that majors are harmless. It is that **releases
+    are tag-driven**: a merged major reaches `main`, not users, and nothing
+    ships until someone pushes `vX.Y.Z`. A bad merge is a revert, not a
+    withdrawn release.
 - **Auto-merge never approves.** `gh pr review --approve` fails outright where
   an org disallows Actions approving PRs, and `run:` uses `bash -e`, so the
   merge line never executes. The rulesets require status checks, not reviews,
