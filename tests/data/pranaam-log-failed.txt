@@ -1,0 +1,6 @@
+Test Python 3.11 on macos-latest	UNKNOWN STEP	2026-08-13T05:44:14.3612170Z tests/test_base.py::TestBase::test_base_class_attributes PASSED          [  1%]
+Test Python 3.11 on macos-latest	UNKNOWN STEP	2026-08-13T05:44:18.8359310Z tests/test_e2e.py::TestRealModelDownloadAndPrediction::test_real_english_predictions FAILED [ 11%]
+Test Python 3.11 on macos-latest	UNKNOWN STEP	2026-08-13T05:44:19.9036760Z E   OSError: No file or directory found at /Users/runner/work/pranaam/pranaam/pranaam/model/eng_and_hindi_models_v2/eng_model.keras
+Test Python 3.11 on macos-latest	UNKNOWN STEP	2026-08-13T05:44:19.9064020Z ERROR    pranaam:utils.py:74 File extraction error: empty file
+Test Python 3.11 on macos-latest	UNKNOWN STEP	2026-08-13T05:44:19.9064360Z ERROR    pranaam:base.py:39 ERROR: Cannot download model data file
+Test Python 3.11 on macos-latest	UNKNOWN STEP	2026-08-13T05:44:19.9072360Z E   OSError: No file or directory found at /Users/runner/work/pranaam/pranaam/pranaam/model/eng_and_hindi_models_v2/hin_model.keras
