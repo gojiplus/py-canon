@@ -19,6 +19,10 @@ jobs:
     uses: ./.github/workflows/reusable-ci.yml
     with:
       wheel-import: py_canon
+      # The repo that defines the standard gates on it. `run-preen` defaults to
+      # false, so opting in here is what makes the README's conformance claim
+      # true of at least the repo making the claim.
+      run-preen: true
 
   actionlint:
     runs-on: ubuntu-latest
@@ -57,7 +61,13 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       - name: Generate project from template
         run: |
-          uvx copier copy --trust . /tmp/smoke-pkg \
+          # --vcs-ref=HEAD is load-bearing: copier defaults to the latest *tag*
+          # of a git template, and this repo's fleet-facing `v1` is a tag. It
+          # happens to work without the flag only because actions/checkout does
+          # a depth-1 fetch that carries no tags, so copier falls back to HEAD.
+          # Anyone adding fetch-depth: 0 to this job would silently turn the
+          # smoke test into a test of the last release instead of this change.
+          uvx copier copy --trust --vcs-ref=HEAD . /tmp/smoke-pkg \
             -d project_name=smoke-pkg -d description="Smoke test package" \
             -d needs_cli=true --defaults
       - name: Run the full gate on the generated project
@@ -75,6 +85,19 @@ jobs:
           uv build
           uv run python -c "import smoke_pkg; assert smoke_pkg.__version__ == '0.1.0'"
           uv run sphinx-build -W -q -b html docs _site
+          # The template's whole job is to produce a repo that meets the
+          # standard, so assert exactly that rather than trusting it. Without
+          # this line the template drifted from the standard it distributes:
+          # it shipped the deprecated `license = { text = "MIT" }` form and no
+          # CHANGELOG, so every generated repo was born failing conformance.
+          #
+          # Two checks are skipped because they fail on facts about *this
+          # throwaway project*, not about the template. `links` 404s on
+          # github.com/gojiplus/smoke-pkg, a repo that will never exist.
+          # `template` reports drift because the project is generated from an
+          # unreleased commit, so its recorded _commit is ahead of the latest
+          # tag. The other sixteen checks gate.
+          uvx preen check --strict --skip links --skip template
           echo "template smoke test: full gate green"
 
   promote:
