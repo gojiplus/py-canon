@@ -79,14 +79,30 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Auto-merge everything except Python-ecosystem majors:
-      # - grouped PRs report the highest bump anywhere in the group (including
-      #   transitive lockfile updates), so trust our own minor-and-patch groups
-      # - GitHub-Actions majors are CI-validated and low blast radius
-      # An unrecognised or empty update-type is NOT eligible, so metadata
-      # failures leave the PR open rather than merging it. Each branch is a
-      # full if/case, never `test && var=true`: under `bash -e` a failing test
-      # as the last statement of a step fails the whole step.
+      # Everything Dependabot opens is eligible. What decides whether it lands
+      # is CI, in the sweep below: every check terminal, none failed.
+      #
+      # This used to exclude Python-ecosystem majors, on the reasoning that a
+      # major is a declared breaking change and green tests are not proof.
+      # True, and outweighed by two things about how this fleet works:
+      #
+      #   Releases are tag-driven. A merged major reaches `main`, not users.
+      #   Nothing ships until someone pushes vX.Y.Z, so the blast radius is a
+      #   branch that can be reverted rather than a PyPI release that cannot.
+      #
+      #   The backlog was the bigger risk. Measured across the fleet: 57 open
+      #   Dependabot PRs, 37 of them green and simply never merged. in-rolls/
+      #   indicate was carrying eight dependencies with published security
+      #   fixes -- click, jupyter-server, jupyterlab, mistune, pillow,
+      #   pygments, setuptools, soupsieve -- because nothing landed them.
+      #
+      # The security group is the sharpest case, and it was the one this got
+      # wrong. `python-security` never matched `*minor-and-patch*`, and a
+      # security fix is often a major, so the updates most worth landing fast
+      # were the least likely to merge. Routine patch bumps sailed past them.
+      #
+      # An empty ecosystem still means metadata failed, and that is the one
+      # case left open: it is not a decision, it is the absence of one.
       - name: Decide eligibility
         id: gate
         env:
@@ -94,16 +110,11 @@ jobs:
           GROUP: ${{ steps.metadata.outputs.dependency-group }}
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
         run: |
-          eligible=false
-          if [ "$ECOSYSTEM" = "github_actions" ]; then
+          if [ -n "$ECOSYSTEM" ]; then
             eligible=true
+          else
+            eligible=false
           fi
-          case "$GROUP" in
-            *minor-and-patch*) eligible=true ;;
-          esac
-          case "$UPDATE_TYPE" in
-            version-update:semver-minor|version-update:semver-patch) eligible=true ;;
-          esac
           echo "ecosystem=$ECOSYSTEM group=$GROUP update-type=$UPDATE_TYPE eligible=$eligible"
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
 
@@ -215,7 +226,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr comment "$PR_URL" --body \
-            "Left open for manual review — auto-merge covers GitHub-Actions updates, our minor-and-patch groups, and patch/minor Python bumps."
+            "Left open for manual review — Dependabot metadata could not be read for this PR, so no eligibility decision was made. That is the absence of a decision rather than a refusal; everything with readable metadata is eligible and lands once CI is green."
 
   sweep:
     name: Re-arm stranded PRs
