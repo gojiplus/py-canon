@@ -50,7 +50,41 @@ jobs:
       - name: Pydoclint
         if: inputs.run-pydoclint
         run: |
-          if [ -d src ]; then uv run pydoclint src/; else echo "no src/, skipping"; fi
+          set -euo pipefail
+          # A bare `-d src` test silently exempted every flat-layout repo --
+          # six of them, at last count -- and a check that prints "skipping"
+          # and exits 0 is indistinguishable from one that passed. So derive
+          # the package directory the way preen's structure check does, from
+          # the distribution name, allowing for the usual hyphen/underscore
+          # swap (know-your-ip -> know_your_ip).
+          if [ -d src ]; then
+            uv run pydoclint src/
+            exit 0
+          fi
+          # Matched on __init__.py rather than a bare directory test: a repo
+          # can carry a data/ or docs/ directory sharing the project name.
+          pkg=$(uv run python -c '
+          import pathlib
+          import tomllib
+
+          with open("pyproject.toml", "rb") as fh:
+              name = tomllib.load(fh).get("project", {}).get("name", "")
+          hit = next(
+              (
+                  c
+                  for c in (name, name.replace("-", "_"))
+                  if c and pathlib.Path(c, "__init__.py").is_file()
+              ),
+              "",
+          )
+          print(hit)
+          ')
+          if [ -z "$pkg" ]; then
+            echo "::error::pydoclint found no package to check: there is no src/, and no directory matching the project name contains an __init__.py. Pass run-pydoclint: false if this repo genuinely has nothing for it to check."
+            exit 1
+          fi
+          echo "pydoclint: flat layout, checking $pkg/"
+          uv run pydoclint "$pkg"
       - name: Preen conformance
         if: inputs.run-preen
         run: uvx preen check --strict
