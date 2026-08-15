@@ -150,14 +150,35 @@ advanced **only by the promote workflow after green CI** — never by hand.
 Breaking standard changes go to `v2`, not a mutated `v1`.
 
 Detection: every repo's CI runs weekly on cron (dormant repos surface
-ecosystem drift); the daily **fleet-health** workflow here scans every repo
-in `FLEET` and maintains a single "Fleet health" issue listing red repos.
+ecosystem drift); the daily **fleet-health** workflow here scans every repo in
+`FLEET` and maintains a single "Fleet health" issue.
+
+Triage: that issue is not a list of names. `py_canon.fleet_triage` also
+records, per red repo, the failed job and step, an excerpt of the error lines,
+how long it has been red, and an origin — from two rules, not a guess:
+
+- *Did unchanged code go red?* An earlier green run on the same `head_sha`
+  means the cause is outside the repo. This is what the weekly cron is for.
+- *Is more than one repo failing the same step?* One repo failing a shared
+  check is usually its own code; several at once is canon's.
+
+It also correlates across repos — a step or a hostname appearing in two or
+more failures at once. That is the only view in which a shared dependency
+breaking looks like one problem instead of five unrelated ones.
+
+The origin is a rule, not a diagnosis. It is right often enough to route the
+work and always shows the evidence it used.
 
 Response, by origin:
 1. **Canon-caused** (reusable workflow / template bug): fix in canon; the
    promote workflow moves `v1`; the fleet heals with zero per-repo commits.
+   **One PR, here — never a pull request per repo.**
 2. **Ecosystem-caused** (action major, runner image, tool release): if it
    lives in a shared workflow, same as (1). If per-repo, dependabot config.
-3. **Repo-specific** (real test failure): fix in the repo.
+3. **Repo-specific** (real test failure): fix in the repo. Where the failing
+   step is a conformance check, `tools/fleet-open-fix-pr.sh <repo>` opens the
+   `preen fix` PR for you; where it is not, that script refuses and
+   `--file-issue` hands the maintainer the triage instead. A patch nobody
+   diagnosed costs a reviewer more than the red build it replaces.
 
 Rollback (fleet-wide undo): `git push -f origin <last-good-sha>:refs/tags/v1`.
