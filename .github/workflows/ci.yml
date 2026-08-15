@@ -19,6 +19,10 @@ jobs:
     uses: ./.github/workflows/reusable-ci.yml
     with:
       wheel-import: py_canon
+      # The repo that defines the standard gates on it. `run-preen` defaults to
+      # false, so opting in here is what makes the README's conformance claim
+      # true of at least the repo making the claim.
+      run-preen: true
 
   actionlint:
     runs-on: ubuntu-latest
@@ -75,6 +79,12 @@ jobs:
           uv build
           uv run python -c "import smoke_pkg; assert smoke_pkg.__version__ == '0.1.0'"
           uv run sphinx-build -W -q -b html docs _site
+          # The template's whole job is to produce a repo that meets the
+          # standard, so assert exactly that rather than trusting it. Without
+          # this line the template drifted from the standard it distributes:
+          # it shipped the deprecated `license = { text = "MIT" }` form and no
+          # CHANGELOG, so every generated repo was born failing conformance.
+          uvx preen check --strict
           echo "template smoke test: full gate green"
 
   promote:
