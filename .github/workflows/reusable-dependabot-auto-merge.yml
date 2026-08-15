@@ -7,10 +7,12 @@
 # mergeable and simply never armed. Referencing this means the next fix
 # reaches every repo on its next run.
 #
-# Two entry points, one eligibility decision. The caller supplies both:
+# Two entry points. The caller supplies both:
 #
-#   pull_request  decides eligibility once, records the verdict as a label, arms
-#   schedule      re-arms anything GitHub silently disarmed since
+#   pull_request  arms auto-merge on a new Dependabot PR, where arming means
+#                 something -- see the required-checks note below
+#   schedule      merges anything green that is still open, whatever disarmed
+#                 it, and whether or not this workflow existed when it opened
 #
 # The scheduled half exists because of a measured failure. On appeler/pranaam
 # PR #29 the workflow armed auto-merge at 17:27:11 and GitHub disabled it at
@@ -36,15 +38,6 @@ on:
         required: false
         type: number
         default: 12
-      eligible-label:
-        description: >
-          Label carrying the eligibility verdict from the pull_request half to
-          the scheduled half. Dependabot metadata is only available in a
-          pull_request context, and major-versus-minor is not recoverable from
-          a branch name, so the decision is made once and read back later.
-        required: false
-        type: string
-        default: automerge-eligible
 
 # Granted per job rather than here: a workflow-level write grant applies to
 # every job, which zizmor's excessive-permissions audit rejects once there is
@@ -52,7 +45,6 @@ on:
 permissions: {}
 
 env:
-  ELIGIBLE_LABEL: ${{ inputs.eligible-label }}
   STALE_AFTER_HOURS: ${{ inputs.stale-after-hours }}
   # Neither job checks out the repo, so gh has no git remote to infer from.
   # Steps that pass a PR URL resolve the repo from the argument; `gh label
@@ -117,18 +109,6 @@ jobs:
           fi
           echo "ecosystem=$ECOSYSTEM group=$GROUP update-type=$UPDATE_TYPE eligible=$eligible"
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
-
-      # The label is what makes the scheduled sweep possible without it having
-      # to guess. Created with --force so the first run in a repo works.
-      - name: Record the verdict on the PR
-        if: steps.gate.outputs.eligible == 'true'
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh label create "$ELIGIBLE_LABEL" --force --color 0e8a16 \
-            --description "Auto-merge policy says yes; the sweep may arm or land this"
-          gh pr edit "$PR_URL" --add-label "$ELIGIBLE_LABEL"
 
       # No `gh pr review --approve`: it fails outright where the repo has
       # "Allow GitHub Actions to create and approve pull requests" off, which
@@ -273,7 +253,6 @@ jobs:
           import json, os, datetime as dt
 
           TERMINAL_OK = {"SUCCESS", "SKIPPED", "NEUTRAL"}
-          label = os.environ["ELIGIBLE_LABEL"]
           stale_after = dt.timedelta(hours=float(os.environ["STALE_AFTER_HOURS"]))
           now = dt.datetime.now(dt.UTC)
 
@@ -308,11 +287,20 @@ jobs:
 
           for pr in json.load(open("prs.json")):
               n = pr["number"]
-              names = {l["name"] for l in pr.get("labels") or []}
               age = now - dt.datetime.fromisoformat(pr["createdAt"].replace("Z", "+00:00"))
-              if label not in names:
-                  verdict, act = "ineligible (no policy label)", "none"
-              elif pr.get("autoMergeRequest"):
+              # No label check. The label existed to carry the major-versus-
+              # minor verdict from the pull_request context, where Dependabot
+              # metadata is readable, into this one, where it is not. Now that
+              # every update is eligible and CI decides, there is no verdict to
+              # carry -- and the label had become the thing blocking recovery:
+              # `on: pull_request` does not retro-fire, so a PR opened before
+              # this workflow reached a repo could never acquire it. On
+              # notnews/notnews the sweep declined all eight open PRs as
+              # "ineligible (no policy label)", the oldest 469 hours old.
+              #
+              # The listing is already `--author app/dependabot`, so authorship
+              # is the eligibility test, and it is one this context can see.
+              if pr.get("autoMergeRequest"):
                   verdict, act = "already armed", "none"
               elif pr["mergeStateStatus"] in {"DIRTY", "DRAFT"}:
                   # A conflict or a draft is unmergeable for everyone, and no
@@ -358,7 +346,7 @@ jobs:
                           verdict += " (BLOCKED for this token; asking anyway)"
               # Only shout when the sweep is unable to act. A PR being merged
               # on this very run is not stranded, however old it is.
-              stale = act == "none" and label in names and age > stale_after
+              stale = act == "none" and age > stale_after
               print(f"{n}\t{act}\t{verdict}\t{int(age.total_seconds()//3600)}h\t{int(stale)}")
           PY
           printf '%-6s %-6s %-32s %6s\n' "PR" "ACTION" "VERDICT" "AGE"
