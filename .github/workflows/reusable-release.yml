@@ -33,9 +33,20 @@ on:
         type: boolean
         default: true
       test-python-version:
-        description: 'Python version for the pre-release test run'
+        # Empty means "let uv choose", which is the only default that cannot be
+        # wrong. A fixed version here was wrong for every project whose floor
+        # was above it: uv could not resolve an interpreter, `test` died at
+        # Sync environment, and because build/publish/github-release all sit
+        # behind `test` they *skipped*. The visible symptom was a missing
+        # GitHub Release rather than a version error, which is what made it
+        # survive a real release (indicate v0.8.0).
+        #
+        # uv reads `requires-python` and downloads a matching interpreter if
+        # the runner has none (`python-downloads` defaults to `automatic`), so
+        # there is nothing left for this input to get wrong.
+        description: 'Pin the pre-release test run to one Python version (default: whatever satisfies requires-python)'
         type: string
-        default: '3.12'
+        default: ''
 
 permissions:
   contents: read
@@ -48,12 +59,23 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          python-version: ${{ inputs.test-python-version }}
+      # setup-uv's `python-version` input only sets UV_PYTHON, and its handling
+      # of an empty string is undocumented -- so set the variable directly, and
+      # only when a caller actually asked for a pin.
+      - name: Pin the interpreter, if the caller asked for one
+        if: inputs.test-python-version != ''
+        env:
+          PINNED: ${{ inputs.test-python-version }}
+        run: echo "UV_PYTHON=$PINNED" >> "$GITHUB_ENV"
       # Same sync as reusable-ci's test job, so a release runs what CI runs.
       - name: Sync environment
         run: |
           if [ -f uv.lock ]; then uv sync --frozen --all-groups --all-extras; else uv sync --all-groups --all-extras; fi
+      # A release is the one action that cannot be taken back, so the log says
+      # which interpreter the suite actually ran on rather than leaving it to
+      # be inferred from the runner image.
+      - name: Report the resolved interpreter
+        run: uv run python -VV
       - name: Run tests
         run: uv run pytest
 
