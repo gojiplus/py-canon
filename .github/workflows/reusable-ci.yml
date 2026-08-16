@@ -122,6 +122,25 @@ jobs:
             uv run pytest
           fi
 
+      # Coverage belongs in the run you are already looking at, not in a file
+      # on a runner that is about to be deleted. `--cov-report=html` wrote an
+      # htmlcov/ nobody opened, and `=xml` a coverage.xml nothing uploaded --
+      # four fleet repos were doing one or both, and no CI in any of them read
+      # the result.
+      #
+      # `if: always()` because a failing suite is when the number is most worth
+      # seeing. `|| true` because a missing .coverage file means coverage was
+      # not enabled for this leg, which is not a failure.
+      - name: Coverage summary
+        if: always() && inputs.coverage-floor != 0
+        run: |
+          {
+            echo "## Coverage"
+            echo
+            uv run coverage report --format=markdown || echo "_no coverage data_"
+          } >> "$GITHUB_STEP_SUMMARY"
+        continue-on-error: true
+
   wheel:
     name: Test built wheel
     runs-on: ubuntu-latest
