@@ -63,6 +63,29 @@ change to every adopted repo.
   standard badge row, `.pre-commit-config.yaml`, `.github/dependabot.yml`
   (guarded auto-merge policy).
 
+## Runtime assets
+
+- Runtime tables shipped in a wheel or kept as a persistent package cache use
+  **Parquet with an explicit Arrow schema**. Loaders read Parquet directly and
+  tests assert the logical dtypes. Do not infer production types from CSV.
+- Structured records that are not naturally tabular may use **Protobuf** with
+  a checked-in schema. The requirement is a declared, testable schema, not one
+  universal storage format.
+- CSV and TSV remain valid at user-facing import or export boundaries, as test
+  fixtures, and as raw external research inputs outside the import package.
+  External CSV downloads are temporary inputs: validate them, normalize them
+  to the declared schema, and persist only Parquet or Protobuf.
+- Do not package CSV, compressed CSV or TSV, CSV hidden in an archive, or an
+  opaque archive that the runtime must unpack. Compression does not add a
+  schema.
+- Learned model weights and serialized estimators do not belong in the Python
+  wheel. Publish them under the fleet's Hugging Face organization, keep a
+  model card with provenance and limitations, and resolve them using the full
+  40-character Hugging Face commit SHA. Branch names, tags, abbreviated SHAs,
+  and unpinned `from_pretrained` calls are not reproducible.
+- Development can override the download cache or model directory with a
+  package-specific environment variable. Production defaults remain pinned.
+
 ## Versioning and release
 
 - **The git tag is the version.** `uv-dynamic-versioning` derives the package
@@ -158,7 +181,14 @@ Workflow hygiene baked into the shims/reusables: top-level
 
 `preen check --strict` runs in CI (part of the lint job) and fails a repo that
 drifts from the standard: template drift, stale generated files, structure
-violations, docstring gaps, dead links, CI-matrix mismatch.
+violations, invalid runtime assets, docstring gaps, dead links, CI-matrix
+mismatch.
+
+An entry in `FLEET` means py-canon monitors the repository. It does not mean
+the repository has adopted the standard. Adoption means the repository records
+Copier answers, uses the shared workflow and Sphinx layers, and passes
+`preen check --strict`. The inventory must report those facts separately so a
+listed but unmigrated package is never presented as conforming.
 
 ## CI failure playbook
 
