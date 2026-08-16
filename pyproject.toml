@@ -38,7 +38,6 @@ dev = [
     "ruff>=0.16.1",
     "pyright>=1.1.390",
     "pytest>=8",
-    "pydoclint>=0.5",
 ]
 test = ["pytest>=8", "sphinx>=8", "furo", "myst-parser", "sphinx-copybutton"]
 docs = ["sphinx>=8", "furo", "myst-parser", "sphinx-copybutton"]

@@ -34,8 +34,10 @@ change to every adopted repo.
   left to individual repos; `preen adopt` preserves a repo's own
   `extend-select` rather than overwriting it.
 - **pyright** (`standard` mode) is the only type checker. No mypy.
-- **pydoclint** (google style) for docstring–signature consistency, which
-  ruff's `D` rules don't check.
+- **pydoclint** 0.9.1 (google style) for docstring–signature consistency, which
+  ruff's `D` rules don't check. CI runs it with `uvx` in an isolated environment
+  because `pydoclint` and `docstring-parser` dependencies used by application
+  packages can otherwise install conflicting `docstring_parser` modules.
 - **pytest + coverage**; a coverage floor is set per repo (template question).
   Coverage is reported as a markdown table in the GitHub **job summary** of the
   run that produced it — `coverage report --format=markdown` into
