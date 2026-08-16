@@ -37,6 +37,14 @@ change to every adopted repo.
 - **pydoclint** (google style) for docstring–signature consistency, which
   ruff's `D` rules don't check.
 - **pytest + coverage**; a coverage floor is set per repo (template question).
+  Coverage is reported as a markdown table in the GitHub **job summary** of the
+  run that produced it — `coverage report --format=markdown` into
+  `$GITHUB_STEP_SUMMARY`, from `reusable-ci.yml`.
+  - **No `--cov-report=html` or `=xml` in `addopts`.** They write `htmlcov/`
+    and `coverage.xml` onto a runner that is about to be deleted, and into the
+    working tree of anyone who runs the suite locally. Four fleet repos were
+    doing one or both and no CI in any of them read the result. Ask for a file
+    report explicitly when you want one.
 
 ## Python support
 
