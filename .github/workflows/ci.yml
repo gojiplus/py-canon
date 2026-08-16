@@ -81,6 +81,7 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
+          uvx --from pydoclint==0.9.1 pydoclint src/
           uv run pytest -q
           uv build
           uv run python -c "import smoke_pkg; assert smoke_pkg.__version__ == '0.1.0'"

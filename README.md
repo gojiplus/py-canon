@@ -3,10 +3,10 @@
 One versioned standard for the fleet's Python packages, plus the machinery
 that keeps ~50 repos on it without copy-paste.
 
-**The standard:** [STANDARD.md](STANDARD.md) — uv, ruff, pyright, google
-docstrings, src/ layout, tag-driven releases with trusted publishing,
-Sphinx+furo docs. Changing the fleet's mind is a PR to that file and the
-assets here.
+**The standard:** [STANDARD.md](STANDARD.md) covers uv, ruff, pyright, google
+docstrings, src layout, typed runtime assets, Hugging Face model storage,
+tag-driven releases with trusted publishing, and Sphinx with furo. Changing
+the fleet's mind is a PR to that file and the assets here.
 
 **The machinery (DRY hierarchy — reference where possible, materialize only
 where forced):**

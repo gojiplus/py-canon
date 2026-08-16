@@ -58,7 +58,7 @@ jobs:
           # the distribution name, allowing for the usual hyphen/underscore
           # swap (know-your-ip -> know_your_ip).
           if [ -d src ]; then
-            uv run pydoclint src/
+            uvx --from pydoclint==0.9.1 pydoclint src/
             exit 0
           fi
           # Matched on __init__.py rather than a bare directory test: a repo
@@ -84,7 +84,7 @@ jobs:
             exit 1
           fi
           echo "pydoclint: flat layout, checking $pkg/"
-          uv run pydoclint "$pkg"
+          uvx --from pydoclint==0.9.1 pydoclint "$pkg"
       - name: Preen conformance
         if: inputs.run-preen
         run: uvx preen check --strict
