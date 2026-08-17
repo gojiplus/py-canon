@@ -69,14 +69,19 @@ jobs:
           # smoke test into a test of the last release instead of this change.
           uvx copier copy --trust --vcs-ref=HEAD . /tmp/smoke-pkg \
             -d project_name=smoke-pkg -d description="Smoke test package" \
-            -d needs_cli=true --defaults
+            -d package_name=smoke_core -d needs_cli=true --defaults
       - name: Run the full gate on the generated project
         run: |
           cd /tmp/smoke-pkg
-          git init -q && git add -A && git -c user.email=ci@local -c user.name=ci commit -qm init && git tag v0.1.0
           # docs group references py-canon@v1 on GitHub; for the smoke test,
           # point it at the local checkout being tested instead
           sed -i "s|py-canon @ git+https://github.com/gojiplus/py-canon@v1|py-canon @ file://$GITHUB_WORKSPACE|" pyproject.toml
+          grep -F 'build-backend = "uv_build"' pyproject.toml
+          grep -F 'module-name = "smoke_core"' pyproject.toml
+          if grep -Eq 'hatchling|uv-dynamic-versioning' pyproject.toml; then
+            echo "::error::generated project contains a legacy build backend"
+            exit 1
+          fi
           uv sync --all-groups
           uv run ruff check .
           uv run ruff format --check .
@@ -84,7 +89,7 @@ jobs:
           uvx --from pydoclint==0.9.1 pydoclint src/
           uv run pytest -q
           uv build
-          uv run python -c "import smoke_pkg; assert smoke_pkg.__version__ == '0.1.0'"
+          uv run python -c "import smoke_core; assert smoke_core.__version__ == '0.1.0'"
           uv run sphinx-build -W -q -b html docs _site
           # The template's whole job is to produce a repo that meets the
           # standard, so assert exactly that rather than trusting it. Without

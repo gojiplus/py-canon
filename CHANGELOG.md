@@ -3,9 +3,9 @@
 All notable changes to this project are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versions are the git tags this repo is released from; the fleet-facing `v1` tag
-is a moving pointer advanced by the promote workflow after green CI, not a
-release of its own.
+Release tags match the version committed in `pyproject.toml`; the fleet-facing
+`v1` tag is a moving pointer advanced by the promote workflow after green CI,
+not a release of its own.
 
 ## [Unreleased]
 
@@ -25,6 +25,10 @@ release of its own.
 
 ### Changed
 
+- Replaced Hatchling and tag-derived versions with native `uv_build` and
+  versions managed by `uv version`; release builds now reject mismatched tags.
+- Standardized on `release.yml` for PyPI trusted publishing instead of keeping
+  legacy workflow filenames.
 - `v1` is advanced only by the promote workflow after CI passes, never by hand.
 - The release workflow publishes from the caller's `release.yml`, because PyPI
   trusted publishing cannot bind its OIDC claims to a reusable workflow.
