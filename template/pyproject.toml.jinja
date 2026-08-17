@@ -6,7 +6,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "{{ author_name }}", email = "{{ author_email }}" }]
 requires-python = ">=3.11"
-dynamic = ["version"]
+version = "0.1.0"
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
@@ -22,18 +22,11 @@ Repository = "https://github.com/{{ org }}/{{ project_name }}"
 {{ project_name }} = "{{ package_name }}.cli:main"
 {% endif %}
 [build-system]
-requires = ["hatchling", "uv-dynamic-versioning"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.11.32,<0.12"]
+build-backend = "uv_build"
 
-[tool.hatch.version]
-source = "uv-dynamic-versioning"
-
-[tool.uv-dynamic-versioning]
-vcs = "git"
-style = "pep440"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/{{ package_name }}"]
+[tool.uv.build-backend]
+module-name = "{{ package_name }}"
 
 [dependency-groups]
 dev = [

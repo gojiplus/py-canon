@@ -16,11 +16,11 @@ change to every adopted repo.
 
 ## Toolchain
 
-- **uv** for everything: env, lock (`uv.lock` committed), build, publish.
+- **uv** for everything: env, lock (`uv.lock` committed), version, build,
+  publish.
   CI installs with `--frozen`.
-- Build backend: **hatchling + uv-dynamic-versioning** — chosen over
-  `uv_build` because tag-derived versions (below) require a plugin-capable
-  backend, and no-bump-commits outranks backend minimalism.
+- Build backend: **uv_build**. Use its standard `src/` layout and avoid backend
+  configuration unless the package genuinely needs non-default file inclusion.
 - **ruff** is the only linter and formatter. Line length 88. Lint select:
   `E, W, F, I, B, C4, UP, N, D, S, SIM, T20, PT, RUF, PTH, RET, PIE, FURB,
   PERF, DTZ, LOG, G, TC, FLY, RSE, SLOT, FA, A, EXE, ICN, PGH, PLE, ARG,
@@ -90,27 +90,22 @@ change to every adopted repo.
 
 ## Versioning and release
 
-- **The git tag is the version.** `uv-dynamic-versioning` derives the package
-  version from the latest `v*` tag. No bump commits, no version edits.
-- Pushing tag `vX.Y.Z` runs the release workflow: build → PEP 740
+- **The project metadata is the version.** Set it with `uv version X.Y.Z` and
+  commit the resulting `pyproject.toml` and `uv.lock` changes in the release
+  PR. The package version is therefore stable in source archives and builds
+  made without Git metadata.
+- Tag the merged release commit `vX.Y.Z`. The release workflow rejects a tag
+  that does not match the project version, then runs: build → PEP 740
   attestations → **PyPI trusted publishing** (OIDC, no tokens) → GitHub
   Release with generated notes.
 - PyPI's trusted publishing does not support reusable workflows, so the
   publish job lives in each repo's `release.yml` shim (template-managed);
   build and GitHub Release stay in the reusable workflow. Configure the
   PyPI publisher with workflow `release.yml`, environment `pypi`.
-- **Legacy publishers**: repos whose PyPI publisher predates adoption and
-  is keyed to an old workflow filename (e.g. indicate:
-  `python-publish.yml`, environment `pypi`) strip the publish job from
-  `release.yml` and keep a standalone publish workflow under the legacy
-  filename with exactly the claims the publisher expects — no pypi.org
-  change needed. Caveat: a future `copier update` restores the template
-  `release.yml` (with its embedded publish job) — drop that job again
-  when reconciling, or migrate the publisher config to `release.yml`/
-  `pypi` and delete the legacy file. Repos with **no publisher at all**
-  (some were only ever uploaded manually — check the project's publish
-  run history before assuming) use the standard layout and need one
-  publisher entry created: workflow `release.yml`, environment `pypi`.
+- Migrate legacy PyPI publisher entries to workflow `release.yml` and
+  environment `pypi`; delete old publishing workflows instead of preserving
+  filename-specific exceptions. Repos with no publisher need one standard
+  trusted-publisher entry before their first release.
 - CHANGELOG is the generated release notes; curate in the GitHub Release when
   it matters.
 

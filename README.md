@@ -52,6 +52,7 @@ uvx preen new mypackage  # scaffold a new one
 
 ## Versioning
 
-Tags (`v1.2.3`) version everything at once: the reusable workflows, the
-template, and the `py-canon` package. Repos reference the moving major tag
-`v1`; breaking changes to the standard bump to `v2`.
+`uv version X.Y.Z` updates the `py-canon` package version. A matching
+`vX.Y.Z` tag releases that version. Repos reference the moving major tag `v1`
+for reusable workflows and the template; breaking changes to the standard
+bump that tag to `v2`.
