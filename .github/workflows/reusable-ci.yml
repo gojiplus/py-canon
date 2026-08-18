@@ -24,7 +24,7 @@ on:
         type: boolean
         default: false
       run-wheel:
-        description: 'Build and test an installable wheel'
+        description: 'Install the built wheel in a clean environment and run tests'
         type: boolean
         default: true
       wheel-import:
@@ -162,8 +162,7 @@ jobs:
         continue-on-error: true
 
   wheel:
-    name: Test built wheel
-    if: inputs.run-wheel
+    name: Build and test wheel
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -176,6 +175,7 @@ jobs:
       - name: Check metadata
         run: uvx twine check dist/*
       - name: Install wheel in clean env and test
+        if: inputs.run-wheel
         env:
           WHEEL_IMPORT: ${{ inputs.wheel-import }}
         run: |

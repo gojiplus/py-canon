@@ -24,11 +24,22 @@ def test_ci_syncs_only_the_canonical_dev_group() -> None:
     assert "--all-groups" not in release_workflow
 
 
-def test_repository_bound_projects_can_skip_wheel_validation() -> None:
-    """A declared non-distributable project can disable only the wheel job."""
+def test_repository_bound_projects_still_build_the_wheel() -> None:
+    """Non-distributable projects skip installation, not package validation."""
     workflow = WORKFLOW.read_text()
     assert "run-wheel:" in workflow
-    assert "if: inputs.run-wheel" in workflow
+    wheel_job = workflow.split("  wheel:\n", 1)[1].split("  workflow-security:\n", 1)[0]
+    job_header = wheel_job.split("    steps:\n", 1)[0]
+    assert "if: inputs.run-wheel" not in job_header
+    assert "      - name: Build\n        run: uv build\n" in wheel_job
+    assert (
+        "      - name: Check metadata\n        run: uvx twine check dist/*\n"
+        in wheel_job
+    )
+    assert (
+        "      - name: Install wheel in clean env and test\n"
+        "        if: inputs.run-wheel\n"
+    ) in wheel_job
 
 
 def test_wheel_test_does_not_replace_the_built_wheel() -> None:
