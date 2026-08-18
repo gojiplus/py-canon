@@ -46,6 +46,13 @@ not a release of its own.
 ### Fixed
 
 - A release no longer fails when the same version is published twice.
+- Wheel tests keep the built wheel installed, install only the declared test
+  dependencies, verify its import outside the checkout, and keep checkout
+  source paths behind the installed artifact while running tests.
+- CI and release tests install `dev` plus `test` when declared, ignore configured
+  default groups, and avoid mutually exclusive operational environments.
+- Repository-bound projects can explicitly disable wheel validation without
+  weakening the default for distributable packages.
 - Windows runners work: the test job pins bash.
 - zizmor policy covers reusable-workflow subpath refs.
 

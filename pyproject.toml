@@ -27,7 +27,7 @@ build-backend = "uv_build"
 dev = [
     "ruff>=0.16.2",
     "pyright>=1.1.390",
-    "pytest>=8",
+    { include-group = "test" },
 ]
 test = ["pytest>=8", "sphinx>=8", "furo", "myst-parser", "sphinx-copybutton"]
 docs = ["sphinx>=8", "furo", "myst-parser", "sphinx-copybutton"]
