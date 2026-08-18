@@ -9,6 +9,8 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-17
+
 ### Added
 
 - Fleet inventory (`docs/fleet-inventory.md`) and a comparison of this standard
@@ -55,5 +57,6 @@ not a release of its own.
   workflows, the copier template, and shared Sphinx configuration
   (`py_canon.sphinx`).
 
-[Unreleased]: https://github.com/gojiplus/py-canon/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/gojiplus/py-canon/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/gojiplus/py-canon/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/gojiplus/py-canon/releases/tag/v1.0.0
