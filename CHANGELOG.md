@@ -25,6 +25,8 @@ not a release of its own.
 
 ### Changed
 
+- Raised the `uv_build` floor to 0.12.5 and its compatibility ceiling to the
+  next minor release in both py-canon and generated projects.
 - Replaced Hatchling and tag-derived versions with native `uv_build` and
   versions managed by `uv version`; release builds now reject mismatched tags.
 - Standardized on `release.yml` for PyPI trusted publishing instead of keeping
