@@ -121,6 +121,10 @@ Every repo's workflows are thin shims calling this repo's reusable workflows:
   on default-branch pushes.
 - `release.yml` → tag-driven publish as above.
 
+Repository-bound projects that are deliberately not installable distributions
+set `run-wheel: false` in the CI shim. This is an explicit exception for data
+corpora and similar projects, not a way to bypass a failing package build.
+
 Workflow hygiene baked into the shims/reusables: top-level
 `permissions: contents: read`, `concurrency` cancel-in-progress,
 `timeout-minutes` on every job.

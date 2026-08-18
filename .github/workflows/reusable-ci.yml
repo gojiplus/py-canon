@@ -23,6 +23,10 @@ on:
         description: 'Run preen check --strict in the lint job'
         type: boolean
         default: false
+      run-wheel:
+        description: 'Build and test an installable wheel'
+        type: boolean
+        default: true
       wheel-import:
         description: 'Import name to smoke-test from the built wheel (defaults to repo package auto-detect)'
         type: string
@@ -40,7 +44,15 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       - name: Sync environment
         run: |
-          if [ -f uv.lock ]; then uv sync --frozen --all-groups --all-extras; else uv sync --all-groups --all-extras; fi
+          test_group=()
+          if python -c 'import sys, tomllib; sys.exit("test" not in tomllib.load(open("pyproject.toml", "rb")).get("dependency-groups", {}))'; then
+            test_group=(--group test)
+          fi
+          if [ -f uv.lock ]; then
+            uv sync --no-default-groups --frozen --group dev "${test_group[@]}" --all-extras
+          else
+            uv sync --no-default-groups --group dev "${test_group[@]}" --all-extras
+          fi
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format
@@ -111,7 +123,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Sync environment
         run: |
-          if [ -f uv.lock ]; then uv sync --frozen --all-groups --all-extras; else uv sync --all-groups --all-extras; fi
+          test_group=()
+          if python -c 'import sys, tomllib; sys.exit("test" not in tomllib.load(open("pyproject.toml", "rb")).get("dependency-groups", {}))'; then
+            test_group=(--group test)
+          fi
+          if [ -f uv.lock ]; then
+            uv sync --no-default-groups --frozen --group dev "${test_group[@]}" --all-extras
+          else
+            uv sync --no-default-groups --group dev "${test_group[@]}" --all-extras
+          fi
       - name: Run tests
         env:
           COVERAGE_FLOOR: ${{ inputs.coverage-floor }}
@@ -143,6 +163,7 @@ jobs:
 
   wheel:
     name: Test built wheel
+    if: inputs.run-wheel
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -160,14 +181,41 @@ jobs:
         run: |
           uv venv /tmp/wheelenv
           . /tmp/wheelenv/bin/activate
-          uv pip install dist/*.whl
-          uv pip install --group test . 2>/dev/null || uv pip install pytest
+          uv pip install dist/*.whl --group test
           import_name="$WHEEL_IMPORT"
           if [ -z "$import_name" ]; then
             import_name=$(basename src/*/ 2>/dev/null | head -1 | tr - _)
           fi
-          python -c "import $import_name; print('import OK:', '$import_name')"
-          if [ -d tests ]; then python -m pytest tests/ -q; fi
+          if [ -d "$GITHUB_WORKSPACE/tests" ]; then
+            python -P -c '
+          import importlib
+          import pathlib
+          import pytest
+          import sys
+
+          class WheelImport:
+              @staticmethod
+              def pytest_configure(config):
+                  module = importlib.import_module(sys.argv[1])
+                  checkout = pathlib.Path(sys.argv[2]).resolve()
+                  locations = []
+                  if getattr(module, "__file__", None):
+                      locations.append(pathlib.Path(module.__file__).resolve())
+                  if getattr(module, "__path__", None):
+                      locations.extend(pathlib.Path(path).resolve() for path in module.__path__)
+                  if not locations:
+                      raise pytest.UsageError(f"cannot determine import location for {sys.argv[1]}")
+                  if any(location == checkout or checkout in location.parents for location in locations):
+                      raise pytest.UsageError(f"{sys.argv[1]} imported from checkout instead of the wheel: {locations}")
+
+          raise SystemExit(pytest.main(
+              ["--import-mode=append", "-o", "pythonpath=", sys.argv[3], "-q"],
+              plugins=[WheelImport()],
+          ))
+          ' "$import_name" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/tests/"
+          else
+            python -P -c 'import importlib, sys; importlib.import_module(sys.argv[1])' "$import_name"
+          fi
 
   workflow-security:
     runs-on: ubuntu-latest
