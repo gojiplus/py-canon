@@ -9,6 +9,11 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Fixed
+
+- Repository-bound projects still build their wheel and validate its metadata;
+  `run-wheel: false` now skips only clean-environment installation and tests.
+
 ## [1.0.1] - 2026-08-17
 
 ### Added

@@ -114,16 +114,18 @@ change to every adopted repo.
 Every repo's workflows are thin shims calling this repo's reusable workflows:
 
 - `ci.yml` → lint (ruff check + format, pyright, pydoclint), test matrix
-  (floor + ceiling), **wheel test** (build the wheel, install it in a clean
-  env, run the test suite against the installed package, `twine check`),
-  `zizmor` on workflow files, dependency review on PRs.
+  (floor + ceiling), **wheel validation** (build the wheel, run `twine check`,
+  install it in a clean env, and run the test suite against the installed
+  package), `zizmor` on workflow files, dependency review on PRs.
 - `docs.yml` → sphinx build with `-W` and doctests, deploy to GitHub Pages
   on default-branch pushes.
 - `release.yml` → tag-driven publish as above.
 
 Repository-bound projects that are deliberately not installable distributions
-set `run-wheel: false` in the CI shim. This is an explicit exception for data
-corpora and similar projects, not a way to bypass a failing package build.
+set `run-wheel: false` in the CI shim. The wheel is still built and checked;
+only installation and installed-package tests are skipped. This is an explicit
+exception for data corpora and similar projects, not a way to bypass a failing
+package build.
 
 Workflow hygiene baked into the shims/reusables: top-level
 `permissions: contents: read`, `concurrency` cancel-in-progress,
