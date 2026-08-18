@@ -6,7 +6,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Gaurav Sood", email = "gsood07@gmail.com" }]
 requires-python = ">=3.11"
-version = "1.0.0"
+version = "1.0.1"
 keywords = ["template", "standards", "sphinx", "ci"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -87,3 +87,10 @@ testpaths = ["tests"]
 #            that workflow does test the floor. The check does not recognize
 #            the local-path form yet.
 skip_checks = ["template", "ci-matrix"]
+link_ignore = [
+    # These release links become valid only after the v1.0.1 tag is pushed.
+    "github\\.com/gojiplus/py-canon/compare/v1\\.0\\.1\\.\\.\\.HEAD",
+    "github\\.com/gojiplus/py-canon/compare/v1\\.0\\.0\\.\\.\\.v1\\.0\\.1",
+    # An intentional 404 used to test fleet-health error classification.
+    "dataverse\\.harvard\\.edu/api/access/datafile/1",
+]
