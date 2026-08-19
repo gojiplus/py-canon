@@ -65,8 +65,42 @@ change to every adopted repo.
   standard badge row, `.pre-commit-config.yaml`, `.github/dependabot.yml`
   (guarded auto-merge policy).
 
+## Naming
+
+Names should explain the domain concept they hold or the responsibility they
+perform. Prefer `category_probabilities` to `probs6`,
+`surname_not_in_dictionary` to `ood`, and `calibration_reference` to a generic
+`metadata` field. A reader should not have to trace assignments to decode an
+ordinary variable.
+
+- Use the same term for the same concept across a package's code, public API,
+  schemas, tests, and documentation. When a package needs domain-specific
+  vocabulary, choose it once and keep it stable.
+- Include units, scale, or role when omission would be ambiguous. Distinguish
+  probabilities from percentages, raw logits from calibrated probabilities,
+  and training rows from test rows.
+- Name booleans as predicates such as `is_valid`, `has_known_features`, or
+  `script_supported`. Use plural nouns for collections, nouns for classes, and
+  verb phrases for functions that perform work.
+- Avoid single-letter names, unexplained abbreviations, type-only names such as
+  `data` or `result`, and numeric suffixes that encode meaning. Short indices
+  and symbols are acceptable in a small mathematical expression when they
+  match the documented notation.
+- Name modules and files for one clear responsibility. Do not accumulate
+  unrelated code in catch-all modules such as `misc` or `helpers`.
+
+Ruff's naming rules enforce syntax, not judgment. Reviewers remain responsible
+for clarity and consistency, and a rename is warranted when a name is legal but
+forces the reader to reconstruct its meaning.
+
 ## Runtime assets
 
+- Small ordered model metadata such as vocabularies, class labels, feature
+  configuration, and training manifests use schema-versioned **JSON**. Loaders
+  validate the schema version, required keys, value types, null policy,
+  uniqueness where applicable, and semantic invariants such as the position of
+  an unknown token. JSON keeps these artifacts inspectable and diffable without
+  adding a serialization runtime to every model package.
 - Runtime tables shipped in a wheel or kept as a persistent package cache use
   **Parquet with an explicit Arrow schema**. Loaders read Parquet directly and
   tests assert the logical dtypes. Do not infer production types from CSV.
