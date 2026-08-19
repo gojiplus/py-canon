@@ -6,7 +6,7 @@ on:
       python-versions:
         description: 'JSON array of Python versions to test'
         type: string
-        default: '["3.11", "3.14"]'
+        default: '["3.12", "3.14"]'
       os:
         description: 'JSON array of runner images for the test matrix'
         type: string
