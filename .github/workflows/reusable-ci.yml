@@ -22,7 +22,7 @@ on:
       run-preen:
         description: 'Run preen check --strict in the lint job'
         type: boolean
-        default: false
+        default: true
       run-wheel:
         description: 'Install the built wheel in a clean environment and run tests'
         type: boolean
