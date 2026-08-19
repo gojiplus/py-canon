@@ -9,6 +9,8 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-19
+
 ### Changed
 
 - `reusable-ci.yml` runs `preen check --strict` in the lint job by default
