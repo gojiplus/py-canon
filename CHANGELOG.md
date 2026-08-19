@@ -9,6 +9,8 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-19
+
 ### Changed
 
 - The Python floor moves to **3.12**: `requires-python = ">=3.12"` in the
