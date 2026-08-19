@@ -9,6 +9,8 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-19
+
 ### Fixed
 
 - The lint job runs `preen check --strict --skip tests`. Preen's `tests` check
