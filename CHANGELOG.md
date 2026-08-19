@@ -9,6 +9,15 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Changed
+
+- The Python floor moves to **3.12**: `requires-python = ">=3.12"` in the
+  standard and the template, ruff `target-version = "py312"`, and
+  `reusable-ci.yml`'s default matrix becomes `["3.12", "3.14"]`. Twenty-five
+  fleet repos already declared 3.12 or higher and had to override
+  `python-versions` by hand because the default's 3.11 leg could not resolve
+  against their floor; that workaround is no longer needed.
+
 ## [1.1.1] - 2026-08-19
 
 ### Fixed
