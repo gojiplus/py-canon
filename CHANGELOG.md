@@ -9,6 +9,19 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Changed
+
+- `reusable-ci.yml` runs `preen check --strict` in the lint job by default
+  (`run-preen` now defaults to true), and the template's ci.yml shim sets it
+  explicitly. The Conformance section of STANDARD.md is now true by
+  construction: every fleet repo passed the check before the flip.
+- `FLEET` extended from 26 to 47 entries — every published PyPI package across
+  the six orgs, ownership-verified by project URL or author email rather than
+  name existence.
+- Added the Naming standard (domain-meaningful names, one term per concept,
+  boolean predicates) and the schema-versioned JSON rule for small ordered
+  model metadata.
+
 ### Fixed
 
 - Repository-bound projects still build their wheel and validate its metadata;
