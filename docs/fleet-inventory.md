@@ -56,6 +56,10 @@ The exemption tier is for a narrower thing: repos that genuinely *are* published
 cannot take the standard. `finite-sample/rmcp` is the case — its CI builds a Docker image and runs
 R integration tests inside it, and the template's `ci.yml` would delete that.
 
+Confirmed 2026-08-18: rmcp stays in FLEET for monitoring and keeps its own CI as the gate. The
+exemption is recorded machine-readably in rmcp's `[tool.preen] skip_checks` (with rationale in
+place), so a stray `preen check` there reports the decision instead of drift.
+
 ### Five more that are not packages, despite carrying pyproject.toml
 
 Found by checking for importable code rather than trusting the manifest:
