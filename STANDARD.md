@@ -227,6 +227,23 @@ Copier answers, uses the shared workflow and Sphinx layers, and passes
 `preen check --strict`. The inventory must report those facts separately so a
 listed but unmigrated package is never presented as conforming.
 
+### Skipping a check
+
+`[tool.preen] skip_checks` records that a check is **structurally inapplicable**
+to a repository — py-canon skips `template` and `ci-matrix` because it *is* the
+template, and `covered` caps `requires-python` because spacy ships no cp314
+wheel. Each entry states its reason in a comment beside it, and names what
+would make the skip removable.
+
+A skip is not a way to defer work. A check that reports a real defect stays on:
+the defect gets fixed, or it gets an issue and a deadline, and the repository is
+red until then. "We have not decided how to fix this yet" is the case a skip
+must never cover, because a silenced check reports success forever and nothing
+distinguishes it from a repository that never had the problem.
+
+Adding a skip is a human decision, recorded as such. An automated change that
+turns a check off is not a conformance fix; it is the removal of one.
+
 ## CI failure playbook
 
 Prevention: canon changes are gated by canon's own CI (including a
