@@ -99,7 +99,12 @@ jobs:
           uvx --from pydoclint==0.9.1 pydoclint "$pkg"
       - name: Preen conformance
         if: inputs.run-preen
-        run: uvx preen check --strict
+        # --skip tests: the test job below already runs the suite, across the
+        # whole matrix and with coverage. Running it a second time here bought
+        # nothing and cost the lint job its 15-minute budget on repos whose
+        # suites are slow -- finite-sample/calibre's lint was cancelled at
+        # 15m15s while pytest was still going.
+        run: uvx preen check --strict --skip tests
 
   test:
     runs-on: ${{ matrix.os }}

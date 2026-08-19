@@ -9,6 +9,13 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Fixed
+
+- The lint job runs `preen check --strict --skip tests`. Preen's `tests` check
+  re-ran the whole pytest suite inside a job budgeted for linting, duplicating
+  work the test matrix already does with coverage — and cancelling the lint job
+  at its 15-minute timeout on repos with slow suites.
+
 ## [1.1.0] - 2026-08-19
 
 ### Changed
