@@ -1,6 +1,10 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "{{ project_name }}"
+# Kept in step with project.version by `preen release`, which offers the
+# bump alongside the changelog rename. A stale one outlives the release in
+# someone else's bibliography.
+version: "0.1.0"
 authors:
   - family-names: "{{ author_name.split(' ')[-1] }}"
     given-names: "{{ author_name.split(' ')[:-1] | join(' ') }}"

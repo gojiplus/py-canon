@@ -21,6 +21,12 @@ not a release of its own.
   in a marker name silently selects nothing. `preen fix pytest-config` writes
   them into an existing repo.
 
+- `CITATION.cff` carries a `version`, in the template and in py-canon's own
+  file. Without it a citation names the software but not the release, and
+  nothing could go stale — but nothing could be checked either. `preen release`
+  offers the bump alongside the changelog rename, and preen's `citation` check
+  reports drift against `project.version`.
+
 ### Fixed
 
 - `scientific-python.org` joins `[tool.preen] link_ignore`. The three URLs
