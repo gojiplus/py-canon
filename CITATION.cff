@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "py-canon"
-version: "1.2.0"
+version: "1.3.0"
 abstract: "One versioned standard for a fleet of Python packages, plus the reusable workflows, copier template and Sphinx configuration that keep the fleet on it."
 authors:
   - family-names: "Sood"

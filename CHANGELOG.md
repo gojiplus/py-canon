@@ -9,6 +9,8 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-26
+
 ### Fixed
 
 - The pydoclint step reads `[tool.uv.build-backend] module-name` before
