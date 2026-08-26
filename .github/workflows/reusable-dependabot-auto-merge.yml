@@ -358,6 +358,7 @@ jobs:
           done < actions.txt
 
       - name: Arm or land
+        id: arm
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -374,6 +375,7 @@ jobs:
             esac
           }
           acted=0
+          merged=0
           while IFS=$'\t' read -r n act _rest; do
             case "$act" in
               arm)
@@ -382,8 +384,44 @@ jobs:
                 acted=$((acted + 1)) ;;
               merge)
                 echo "merging #$n"
-                out=$(gh pr merge "$n" --squash --delete-branch 2>&1) || explain "$n" "$out" merge
+                if out=$(gh pr merge "$n" --squash --delete-branch 2>&1); then
+                  merged=$((merged + 1))
+                else
+                  explain "$n" "$out" merge
+                fi
                 acted=$((acted + 1)) ;;
             esac
           done < actions.txt
-          echo "sweep acted on $acted PR(s)"
+          echo "sweep acted on $acted PR(s), merged $merged"
+          echo "merged=$merged" >> "$GITHUB_OUTPUT"
+
+      # A push made with GITHUB_TOKEN does not trigger workflows -- GitHub
+      # declines that deliberately, to stop a workflow re-triggering itself.
+      # So a merge landed above leaves the default branch at a commit that no
+      # CI run ever covered: the only evidence is the run on the PR branch,
+      # which is then deleted.
+      #
+      # Measured on gojiplus/rowvoi: HEAD was `Bump twine from 6.2.0 to 7.0.0
+      # (#4)`, merged 13:30, with zero workflow runs for its SHA; the passing
+      # run belonged to `dependabot/uv/twine-7.0.0` at 12:37. fleet_triage
+      # reads default-branch runs, so for auto-merge-heavy repos it reports on
+      # an older commit than HEAD and can clear or flag the wrong thing.
+      #
+      # Dispatching is the one path a token-authored merge can still take. It
+      # is best-effort: a repo whose ci.yml predates the `workflow_dispatch`
+      # trigger simply cannot be dispatched, and saying so is more useful than
+      # failing the sweep over it.
+      - name: Run CI on the branch we just merged into
+        if: steps.arm.outputs.merged != '0' && steps.arm.outputs.merged != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if out=$(gh workflow run ci.yml --ref "$DEFAULT_BRANCH" 2>&1); then
+            echo "dispatched CI on $DEFAULT_BRANCH"
+          else
+            printf '%s\n' "$out"
+            echo "::warning::could not dispatch CI on ${DEFAULT_BRANCH}; the \
+            merge commit will have no CI run of its own. If ci.yml has no \
+            workflow_dispatch trigger, re-run 'preen adopt' to pick it up."
+          fi
