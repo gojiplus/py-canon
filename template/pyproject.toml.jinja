@@ -81,7 +81,12 @@ allow-init-docstring = true
 exclude = '\.venv|tests|docs'
 
 [tool.pytest.ini_options]
+minversion = "8"
 testpaths = ["tests"]
+log_level = "INFO"
+xfail_strict = true
+filterwarnings = ["error"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
 
 [tool.coverage.run]
 source = ["src"]
