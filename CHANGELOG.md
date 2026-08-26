@@ -21,6 +21,15 @@ not a release of its own.
 
 ### Fixed
 
+- pre-commit runs the project's own ruff instead of a separately pinned rev.
+  The dev group's ruff floats and CI resolves it from `uv.lock`, so an exact
+  `rev:` was a second version drifting against it — and not harmlessly: ruff
+  0.16 formats Python inside Markdown and 0.15 does not, so
+  `pre-commit run --all-files` passed while `ruff format --check` failed in CI
+  on the same README, across five repos. The hooks are `local` now, running
+  `uv run ruff`, so there is one version to reason about. The format hook also
+  covers Markdown, which is where the two disagreed.
+
 - `check-yield-types = false` joins `check-return-types = false` in the
   pydoclint config. The standard's position is that the signature carries the
   type and the docstring should not repeat it — which it applied to `Returns:`
