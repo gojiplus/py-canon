@@ -75,17 +75,29 @@ jobs:
           fi
           # Matched on __init__.py rather than a bare directory test: a repo
           # can carry a data/ or docs/ directory sharing the project name.
+          # `module-name` first: it is how a repo declares an import name that
+          # differs from its distribution name, and guessing from the
+          # distribution name alone made this step hard-error on a conforming
+          # repo. finite-sample/optimal-classification-cutoffs ships
+          # `optimal_cutoffs/`, so the guess looked for
+          # `optimal_classification_cutoffs/`, found nothing, and the adoption
+          # had to pass run-pydoclint: false on a package that is clean.
           pkg=$(uv run python -c '
           import pathlib
           import tomllib
 
           with open("pyproject.toml", "rb") as fh:
-              name = tomllib.load(fh).get("project", {}).get("name", "")
+              data = tomllib.load(fh)
+          name = data.get("project", {}).get("name", "")
+          backend = data.get("tool", {}).get("uv", {}).get("build-backend", {})
+          root = backend.get("module-root", "")
+          declared = backend.get("module-name", "")
+          candidates = [declared] if declared else [name, name.replace("-", "_")]
           hit = next(
               (
-                  c
-                  for c in (name, name.replace("-", "_"))
-                  if c and pathlib.Path(c, "__init__.py").is_file()
+                  str(pathlib.Path(root, c)) if root else c
+                  for c in candidates
+                  if c and pathlib.Path(root, c, "__init__.py").is_file()
               ),
               "",
           )
