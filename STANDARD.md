@@ -39,6 +39,14 @@ change to every adopted repo.
   because `pydoclint` and `docstring-parser` dependencies used by application
   packages can otherwise install conflicting `docstring_parser` modules.
 - **pytest + coverage**; a coverage floor is set per repo (template question).
+  - **Configured strictly** (sp-repo-review PP301-PP309): `minversion`,
+    `testpaths`, `log_level`, `xfail_strict`, `filterwarnings = ["error"]`, and
+    `-ra`, `--strict-config`, `--strict-markers` in `addopts`. Each of these
+    decides whether a run *fails* rather than how it reads: without
+    `filterwarnings` a dependency's DeprecationWarning stays invisible until
+    the release that removes the API; without `--strict-markers` a typo in a
+    marker name silently selects nothing; without `xfail_strict` a test that
+    starts passing keeps reporting xfail. `preen fix pytest-config` writes them.
   Coverage is reported as a markdown table in the GitHub **job summary** of the
   run that produced it — `coverage report --format=markdown` into
   `$GITHUB_STEP_SUMMARY`, from `reusable-ci.yml`.

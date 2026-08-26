@@ -9,6 +9,18 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Added
+
+- The template and py-canon's own `pyproject.toml` configure pytest strictly
+  (sp-repo-review PP301-PP309): `minversion`, `log_level`, `xfail_strict`,
+  `filterwarnings = ["error"]`, and `-ra`, `--strict-config`,
+  `--strict-markers` in `addopts`, alongside the `testpaths` that was already
+  there. Each of these decides whether a run *fails* rather than how it reads —
+  without `filterwarnings` a dependency's DeprecationWarning stays invisible
+  until the release that removes the API, and without `--strict-markers` a typo
+  in a marker name silently selects nothing. `preen fix pytest-config` writes
+  them into an existing repo.
+
 ### Fixed
 
 - `scientific-python.org` joins `[tool.preen] link_ignore`. The three URLs
