@@ -17,6 +17,14 @@ not a release of its own.
   them fails varies run to run, so every pull request in the repo was blocked
   by a link that is not broken.
 
+- The wheel job tolerates a repo with no `test` dependency group. Its
+  `uv pip install dist/*.whl --group test` was the one place left that assumed
+  the group exists — the two `uv sync` steps have guarded it since 1.1.0 — so
+  `error: The dependency group 'test' was not found` turned an unrelated
+  packaging job red on every repo that had not split one out. Where there is no
+  group but there is a `tests/` directory, pytest is installed directly, since
+  the step goes on to run it inside that clean environment.
+
 ## [1.2.0] - 2026-08-19
 
 ### Changed

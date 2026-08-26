@@ -18,7 +18,8 @@ def test_ci_syncs_only_the_canonical_dev_group() -> None:
     assert unlocked in workflow
     assert frozen in release_workflow
     assert unlocked in release_workflow
-    assert workflow.count("test_group=(--group test)") == 2
+    # Three: the lint and test jobs' syncs, plus the wheel job's install.
+    assert workflow.count("test_group=(--group test)") == 3
     assert release_workflow.count("test_group=(--group test)") == 1
     assert "--all-groups" not in workflow
     assert "--all-groups" not in release_workflow
@@ -45,8 +46,28 @@ def test_repository_bound_projects_still_build_the_wheel() -> None:
 def test_wheel_test_does_not_replace_the_built_wheel() -> None:
     """Resolve the wheel and test dependencies together without source install."""
     workflow = WORKFLOW.read_text()
-    assert "uv pip install dist/*.whl --group test\n" in workflow
+    assert 'uv pip install dist/*.whl "${test_group[@]}"\n' in workflow
     assert "uv pip install --group test ." not in workflow
+
+
+def test_wheel_job_tolerates_a_repo_with_no_test_group() -> None:
+    """The install assumed the group exists; the syncs above it never did.
+
+    `uv pip install dist/*.whl --group test` exits 2 with "The dependency group
+    'test' was not found" on a repo that has not split one out, turning an
+    unrelated packaging job red. Skipping the install alone is not enough: the
+    step goes on to run pytest inside that clean environment, so without a
+    runner the clear error becomes an ImportError.
+    """
+    workflow = WORKFLOW.read_text()
+    wheel_job = workflow.split("  wheel:\n", 1)[1].split("  workflow-security:\n", 1)[0]
+    assert "test_group=(--group test)" in wheel_job
+    assert 'uv pip install dist/*.whl "${test_group[@]}"' in wheel_job
+    assert (
+        "          if [ ${#test_group[@]} -eq 0 ] "
+        '&& [ -d "$GITHUB_WORKSPACE/tests" ]; then\n'
+        "            uv pip install pytest\n" in wheel_job
+    )
 
 
 def test_wheel_import_runs_after_conftest_and_checks_its_location() -> None:

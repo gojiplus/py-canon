@@ -186,7 +186,19 @@ jobs:
         run: |
           uv venv /tmp/wheelenv
           . /tmp/wheelenv/bin/activate
-          uv pip install dist/*.whl --group test
+          # Guarded the same way the sync steps above are: uv exits 2 with
+          # "The dependency group 'test' was not found" on a repo that has not
+          # split one out yet, which turns an unrelated packaging job red.
+          test_group=()
+          if python -c 'import sys, tomllib; sys.exit("test" not in tomllib.load(open("pyproject.toml", "rb")).get("dependency-groups", {}))'; then
+            test_group=(--group test)
+          fi
+          uv pip install dist/*.whl "${test_group[@]}"
+          # The branch below runs pytest inside this clean environment, so a
+          # repo with tests but no test group still needs a runner in it.
+          if [ ${#test_group[@]} -eq 0 ] && [ -d "$GITHUB_WORKSPACE/tests" ]; then
+            uv pip install pytest
+          fi
           import_name="$WHEEL_IMPORT"
           if [ -z "$import_name" ]; then
             import_name=$(basename src/*/ 2>/dev/null | head -1 | tr - _)
