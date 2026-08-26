@@ -9,6 +9,14 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Fixed
+
+- `scientific-python.org` joins `[tool.preen] link_ignore`. The three URLs
+  `docs/gap-analysis.md` cites all answer 200 from a workstation, but from
+  GitHub Actions egress the request hangs until lychee gives up — and which of
+  them fails varies run to run, so every pull request in the repo was blocked
+  by a link that is not broken.
+
 ## [1.2.0] - 2026-08-19
 
 ### Changed
