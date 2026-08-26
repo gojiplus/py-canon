@@ -178,3 +178,33 @@ def test_pydoclint_derives_the_package_from_module_name() -> None:
     assert 'name.replace("-", "_")' in workflow
     # And a repo with neither is still an error rather than a silent skip.
     assert "pydoclint found no package to check" in workflow
+
+
+AUTO_MERGE = (
+    Path(__file__).parents[1] / ".github/workflows/reusable-dependabot-auto-merge.yml"
+)
+
+
+def test_auto_merge_dispatches_ci_on_the_branch_it_merged_into() -> None:
+    """A GITHUB_TOKEN push does not trigger workflows.
+
+    So an auto-merged PR leaves the default branch at a commit no CI run ever
+    covered — on gojiplus/rowvoi, HEAD had zero runs for its SHA while the
+    passing run belonged to a since-deleted PR branch. fleet_triage reads
+    default-branch runs, so it reported on an older commit than HEAD.
+    """
+    workflow = AUTO_MERGE.read_text()
+    assert "gh workflow run ci.yml --ref" in workflow
+    # Only when something actually landed: a declined merge must not dispatch.
+    assert "steps.arm.outputs.merged != '0'" in workflow
+    # And a repo whose ci.yml predates the trigger warns rather than failing.
+    assert "could not dispatch CI" in workflow
+
+
+def test_ci_accepts_a_dispatch() -> None:
+    """The dispatch above needs the shim to declare the trigger."""
+    for shim in (
+        Path(__file__).parents[1] / ".github/workflows/ci.yml",
+        Path(__file__).parents[1] / "template/.github/workflows/ci.yml.jinja",
+    ):
+        assert "workflow_dispatch:" in shim.read_text(), shim

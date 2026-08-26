@@ -30,6 +30,16 @@ not a release of its own.
   `uv run ruff`, so there is one version to reason about. The format hook also
   covers Markdown, which is where the two disagreed.
 
+- The auto-merge sweep dispatches CI on the branch it merged into. A push made
+  with `GITHUB_TOKEN` does not trigger workflows, so an auto-merged Dependabot
+  PR left the default branch at a commit no CI run ever covered — on
+  gojiplus/rowvoi, HEAD had zero runs for its SHA while the passing run
+  belonged to a since-deleted PR branch. `fleet_triage` reads default-branch
+  runs, so it reported on an older commit than HEAD and could clear or flag the
+  wrong thing. The CI shim gains a `workflow_dispatch` trigger to receive it;
+  a repo that has not picked that up yet gets a warning rather than a failed
+  sweep.
+
 - `check-yield-types = false` joins `check-return-types = false` in the
   pydoclint config. The standard's position is that the signature carries the
   type and the docstring should not repeat it — which it applied to `Returns:`
