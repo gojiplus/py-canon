@@ -161,3 +161,20 @@ def test_wheel_check_rejects_source_injecting_conftest(tmp_path: Path) -> None:
     result = _run_wheel_check(wheel_site, checkout)
     assert result.returncode != 0
     assert "imported from checkout" in result.stdout + result.stderr
+
+
+def test_pydoclint_derives_the_package_from_module_name() -> None:
+    """A repo may declare an import name unlike its distribution name.
+
+    finite-sample/optimal-classification-cutoffs ships `optimal_cutoffs/`.
+    Guessing from the distribution name looked for
+    `optimal_classification_cutoffs/`, found nothing, and hard-errored — so the
+    adoption had to pass `run-pydoclint: false` on a package that is clean.
+    """
+    workflow = WORKFLOW.read_text()
+    assert 'backend.get("module-name", "")' in workflow
+    assert 'backend.get("module-root", "")' in workflow
+    # The distribution-name guess stays, for the repos that have no declaration.
+    assert 'name.replace("-", "_")' in workflow
+    # And a repo with neither is still an error rather than a silent skip.
+    assert "pydoclint found no package to check" in workflow

@@ -11,6 +11,16 @@ not a release of its own.
 
 ### Fixed
 
+- The pydoclint step reads `[tool.uv.build-backend] module-name` before
+  guessing the package directory from the distribution name.
+  finite-sample/optimal-classification-cutoffs ships `optimal_cutoffs/`, so the
+  guess looked for `optimal_classification_cutoffs/`, found nothing, and
+  hard-errored — the adoption had to pass `run-pydoclint: false` on a package
+  that is clean under pydoclint 0.9.1, so a conforming repo silently lost the
+  check. `module-root` is honoured too.
+
+### Fixed
+
 - `check-yield-types = false` joins `check-return-types = false` in the
   pydoclint config. The standard's position is that the signature carries the
   type and the docstring should not repeat it — which it applied to `Returns:`
