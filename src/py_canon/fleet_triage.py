@@ -47,6 +47,18 @@ CANON_CI_REF = "py-canon/.github/workflows/reusable-ci.yml"
 # repo's own spelling of the same check still hits.
 CONFORMANCE_STEP_MARKERS = ("ruff", "pyright", "pydoclint", "preen", "lint", "format")
 
+# GitHub echoes a step's whole `run:` block before executing it, tinted with
+# this SGR sequence. Those lines are the *script*, never its output, and
+# quoting one reports a message the step may never have printed: onlinerake and
+# statqa were both filed as "pydoclint found no package to check" -- a string
+# from the echoed `echo "::error::..."` in reusable-ci.yml -- when pydoclint
+# had passed on both and the real failures were a 404 README badge and three
+# conformance findings.
+# Both renderings: `gh run view --log` writes the escape as the literal two
+# characters "^[" when it is not attached to a terminal, and as a real ESC
+# byte when it is.
+ECHOED_SCRIPT = re.compile(r"(?:\x1b|\^\[)\[36;1m")
+
 # Lines worth quoting from a failed job's log.
 ERROR_PATTERNS = (
     re.compile(r"^E\s{2,}"),  # pytest assertion detail
@@ -55,6 +67,10 @@ ERROR_PATTERNS = (
     re.compile(r"\bFAILED\b"),
     re.compile(r"\b(?:error|Error|ERROR):"),
     re.compile(r"^\s*(?:error|Error|ERROR)\b"),
+    # preen prints its findings as "[warning] links: Broken link: ...". Without
+    # this the excerpt for a failed conformance step is the exit status and
+    # nothing else -- true, and no help to whoever opens the issue.
+    re.compile(r"^\[(?:error|warning)\]\s\S"),
 )
 
 # An orthogonal tag, not a class: a repo-specific failure and an ecosystem
@@ -314,6 +330,8 @@ def _error_lines(log: str, keep: int = 15) -> list[str]:
     seen: set[str] = set()
     for raw_line in log.splitlines():
         # `--log-failed` prefixes every line with "job\tstep\t<ISO ts> ".
+        if ECHOED_SCRIPT.search(raw_line):
+            continue
         line = re.sub(r"^.*?\t.*?\t\S*\s*", "", raw_line).strip()
         line = line.replace("﻿", "")
         if not line or not any(p.search(line) for p in ERROR_PATTERNS):

@@ -40,6 +40,15 @@ not a release of its own.
   a repo that has not picked that up yet gets a warning rather than a failed
   sweep.
 
+- `fleet_triage` quotes a step's output rather than its script. GitHub echoes a
+  `run:` block before executing it, so the echoed `echo "::error::pydoclint
+  found no package to check"` in `reusable-ci.yml` matched the error patterns
+  and became the excerpt — filed against finite-sample/onlinerake and
+  gojiplus/statqa when pydoclint had **passed** on both. Their real failures
+  were a 404 README badge and three conformance findings. preen's own
+  `[warning] check: ...` lines now reach the excerpt too; without them a failed
+  conformance step quoted the exit status and nothing else.
+
 - `check-yield-types = false` joins `check-return-types = false` in the
   pydoclint config. The standard's position is that the signature carries the
   type and the docstring should not repeat it — which it applied to `Returns:`

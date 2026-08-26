@@ -240,3 +240,53 @@ def test_read_fleet_skips_blanks_and_comments(tmp_path) -> None:
     fleet = tmp_path / "FLEET"
     fleet.write_text("# a comment\nowner/one\n\n  owner/two  \n")
     assert read_fleet(fleet) == ["owner/one", "owner/two"]
+
+
+def test_the_echoed_run_block_is_not_quoted_as_an_error() -> None:
+    """GitHub echoes a step's whole `run:` block before executing it.
+
+    Those lines are the script, never its output. Quoting one reports a message
+    the step may never have printed: onlinerake and statqa were both filed as
+    "pydoclint found no package to check" — a string from the echoed
+    `echo "::error::..."` in reusable-ci.yml — when pydoclint had passed on both.
+    """
+    log = (
+        "ci / lint\tUNKNOWN STEP\t2026-08-24T07:31:19.3Z ^[[36;1m  "
+        'echo "::error::pydoclint found no package to check: there is no src/"^[[0m\n'
+        "ci / lint\tUNKNOWN STEP\t2026-08-24T07:31:32.7Z "
+        "[warning] links: Broken link: https://example.com/x (HTTP 404)\n"
+        "ci / lint\tUNKNOWN STEP\t2026-08-24T07:31:32.8Z "
+        "##[error]Process completed with exit code 1.\n"
+    )
+
+    lines = _error_lines(log)
+
+    assert not any("no package to check" in line for line in lines)
+    assert any("Broken link" in line for line in lines)
+
+
+def test_a_real_escape_byte_is_recognised_too() -> None:
+    """`gh run view --log` writes a literal "^[" off a terminal, ESC on one."""
+    log = (
+        "ci / lint\tUNKNOWN STEP\t2026-08-24T07:31:19.3Z \x1b[36;1m  "
+        'echo "::error::this is the script"\x1b[0m\n'
+    )
+
+    assert _error_lines(log) == []
+
+
+def test_preen_findings_reach_the_excerpt() -> None:
+    """Without them a failed conformance step quotes only the exit status.
+
+    True, and no help to whoever opens the issue.
+    """
+    log = (
+        "ci / lint\tUNKNOWN STEP\t2026-08-24T07:31:32.7Z "
+        "[warning] template: .copier-answers.yml records the moving tag _commit='v1'\n"
+        "ci / lint\tUNKNOWN STEP\t2026-08-24T07:31:32.8Z "
+        "##[error]Process completed with exit code 1.\n"
+    )
+
+    lines = _error_lines(log)
+
+    assert any("moving tag" in line for line in lines)
