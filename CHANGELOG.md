@@ -9,6 +9,15 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Fixed
+
+- `check-yield-types = false` joins `check-return-types = false` in the
+  pydoclint config. The standard's position is that the signature carries the
+  type and the docstring should not repeat it — which it applied to `Returns:`
+  and not to `Yields:`, so a generator annotated `Iterator[str]` was still
+  required to say `str:` again in its prose. Same principle, and now the same
+  answer.
+
 ### Added
 
 - The template and py-canon's own `pyproject.toml` configure pytest strictly

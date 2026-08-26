@@ -35,7 +35,10 @@ change to every adopted repo.
   `extend-select` rather than overwriting it.
 - **pyright** (`standard` mode) is the only type checker. No mypy.
 - **pydoclint** 0.9.1 (google style) for docstring–signature consistency, which
-  ruff's `D` rules don't check. CI runs it with `uvx` in an isolated environment
+  ruff's `D` rules don't check. Types are not repeated in the docstring: the
+  signature carries them, so `arg-type-hints-in-docstring`, `check-return-types`
+  and `check-yield-types` are all off. A `Yields:` section describes what the
+  values *are*, the same way a `Returns:` section does. CI runs it with `uvx` in an isolated environment
   because `pydoclint` and `docstring-parser` dependencies used by application
   packages can otherwise install conflicting `docstring_parser` modules.
 - **pytest + coverage**; a coverage floor is set per repo (template question).
