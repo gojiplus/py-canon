@@ -15,6 +15,10 @@ on:
         description: 'Fail tests below this coverage percent (0 disables)'
         type: number
         default: 0
+      test-timeout-minutes:
+        description: 'Maximum runtime for each test-matrix job'
+        type: number
+        default: 30
       run-pydoclint:
         description: 'Run pydoclint in the lint job'
         type: boolean
@@ -27,6 +31,10 @@ on:
         description: 'Install the built wheel in a clean environment and run tests'
         type: boolean
         default: true
+      wheel-timeout-minutes:
+        description: 'Maximum runtime for the wheel build and test job'
+        type: number
+        default: 20
       wheel-import:
         description: 'Import name to smoke-test from the built wheel (defaults to repo package auto-detect)'
         type: string
@@ -120,7 +128,7 @@ jobs:
 
   test:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.test-timeout-minutes }}
     # The only job that runs on the caller's matrix, so the only one that can
     # land on Windows, where the default shell is PowerShell and the POSIX
     # conditionals below fail to parse. Windows runners ship Git Bash, so
@@ -181,7 +189,7 @@ jobs:
   wheel:
     name: Build and test wheel
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: ${{ inputs.wheel-timeout-minutes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

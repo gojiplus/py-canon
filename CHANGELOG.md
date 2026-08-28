@@ -9,6 +9,12 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Added
+
+- Reusable CI callers can set `test-timeout-minutes` and
+  `wheel-timeout-minutes` when a complete test suite legitimately exceeds the
+  default 30- and 20-minute job budgets. The defaults remain unchanged.
+
 ## [1.3.0] - 2026-08-26
 
 ### Fixed
