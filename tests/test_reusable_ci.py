@@ -43,6 +43,17 @@ def test_repository_bound_projects_still_build_the_wheel() -> None:
     ) in wheel_job
 
 
+def test_slow_projects_can_extend_test_and_wheel_timeouts() -> None:
+    """A caller should not have to copy the workflow to fit a valid suite."""
+    workflow = WORKFLOW.read_text()
+    assert "      test-timeout-minutes:\n" in workflow
+    assert "        default: 30\n" in workflow
+    assert "    timeout-minutes: ${{ inputs.test-timeout-minutes }}\n" in workflow
+    assert "      wheel-timeout-minutes:\n" in workflow
+    assert "        default: 20\n" in workflow
+    assert "    timeout-minutes: ${{ inputs.wheel-timeout-minutes }}\n" in workflow
+
+
 def test_wheel_test_does_not_replace_the_built_wheel() -> None:
     """Resolve the wheel and test dependencies together without source install."""
     workflow = WORKFLOW.read_text()
