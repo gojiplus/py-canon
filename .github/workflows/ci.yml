@@ -23,9 +23,9 @@ jobs:
     uses: ./.github/workflows/reusable-ci.yml
     with:
       wheel-import: py_canon
-      # The repo that defines the standard gates on it. `run-preen` defaults to
-      # false, so opting in here is what makes the README's conformance claim
-      # true of at least the repo making the claim.
+      # Redundant with the reusable workflow's own default, which is true,
+      # but stated here because this is the repo that publishes the standard
+      # and its conformance should be visible rather than inherited.
       run-preen: true
 
   actionlint:
