@@ -100,6 +100,11 @@ def main(repos: list[str], dry: bool) -> None:
 
 def via_pull_request(repo: str, base: str, path: str, sha: str, new: str) -> str:
     head = "fleet/dependabot-transitive"
+    existing = gh(
+        "pr", "list", "--repo", repo, "--head", head, "--state", "open", "--json", "url"
+    )
+    if urls := json.loads(existing):
+        return urls[0]["url"] + " (already open)"
     tip = gh("api", f"repos/{repo}/git/ref/heads/{base}", "--jq", ".object.sha").strip()
     # A branch left over from an earlier sweep is reused.
     with contextlib.suppress(subprocess.CalledProcessError):
@@ -142,8 +147,14 @@ def via_pull_request(repo: str, base: str, path: str, sha: str, new: str) -> str
         "--body",
         body,
     ).strip()
-    gh("pr", "merge", "--repo", repo, "--auto", "--squash", url)
-    return url
+    # 16 of the 17 repos that refuse direct writes also have auto-merge
+    # switched off, so arming fails there; the PR is left open to merge
+    # by hand once gate is green.
+    try:
+        gh("pr", "merge", "--repo", repo, "--auto", "--squash", url)
+    except subprocess.CalledProcessError:
+        return url + " (auto-merge off; merge when green)"
+    return url + " (auto-merge armed)"
 
 
 if __name__ == "__main__":
