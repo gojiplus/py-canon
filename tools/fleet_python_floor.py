@@ -113,6 +113,34 @@ def bump(repo: str, work: pathlib.Path, dry: bool) -> str:
         return f"floor is not >={OLD}; nothing to do"
     edit_matrix(clone / ".github/workflows/ci.yml")
     run("uv", "lock", cwd=clone)
+    # A higher ruff target switches on rules for syntax the old floor could
+    # not use: UP040 (the `type` keyword) failed appeler/naampy's lint on the
+    # first sweep. Ruff's own fixes, with the repo's own pinned ruff.
+    run(
+        "uv",
+        "run",
+        "--group",
+        "dev",
+        "ruff",
+        "check",
+        "--fix",
+        "-q",
+        ".",
+        cwd=clone,
+        check=False,
+    )
+    run(
+        "uv",
+        "run",
+        "--group",
+        "dev",
+        "ruff",
+        "format",
+        "-q",
+        ".",
+        cwd=clone,
+        check=False,
+    )
     stat = run("git", "diff", "--stat", cwd=clone).strip().splitlines()[-1]
     if dry:
         return f"would open PR: {stat}"
