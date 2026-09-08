@@ -10,7 +10,8 @@ but ships off until the fleet moves.
 Per repo: shallow clone, edit every place the floor is pinned
 (``requires-python``, ruff ``target-version``, the 3.11 classifier, pyright
 ``pythonVersion``, and a ``python-versions`` matrix in ci.yml), ``uv lock``,
-commit on a branch, open a PR, arm auto-merge. CI decides whether it lands;
+ruff's fixes for what the new target switches on, commit on a branch, open a
+PR, arm auto-merge. CI decides whether it lands;
 nothing runs locally, because 24 test suites is a day and the gate is the
 same either way. An upper bound (``>=3.11,<3.14``) is kept.
 
@@ -114,33 +115,26 @@ def bump(repo: str, work: pathlib.Path, dry: bool) -> str:
     edit_matrix(clone / ".github/workflows/ci.yml")
     run("uv", "lock", cwd=clone)
     # A higher ruff target switches on rules for syntax the old floor could
-    # not use: UP040 (the `type` keyword) failed appeler/naampy's lint on the
-    # first sweep. Ruff's own fixes, with the repo's own pinned ruff.
+    # not use. UP040 (the `type` keyword for aliases) failed appeler/naampy's
+    # lint on the first sweep; its rewrite is marked unsafe, so it is selected
+    # on its own, then a plain --fix pass clears what it leaves behind (the
+    # TypeAlias import it makes unused). The repo's own pinned ruff, via the
+    # dev group.
+    ruff = ("uv", "run", "--group", "dev", "ruff")
     run(
-        "uv",
-        "run",
-        "--group",
-        "dev",
-        "ruff",
+        *ruff,
         "check",
         "--fix",
+        "--unsafe-fixes",
+        "--select",
+        "UP040",
         "-q",
         ".",
         cwd=clone,
         check=False,
     )
-    run(
-        "uv",
-        "run",
-        "--group",
-        "dev",
-        "ruff",
-        "format",
-        "-q",
-        ".",
-        cwd=clone,
-        check=False,
-    )
+    run(*ruff, "check", "--fix", "-q", ".", cwd=clone, check=False)
+    run(*ruff, "format", "-q", ".", cwd=clone, check=False)
     stat = run("git", "diff", "--stat", cwd=clone).strip().splitlines()[-1]
     if dry:
         return f"would open PR: {stat}"
