@@ -27,6 +27,14 @@ not a release of its own.
   floor, which with warnings-as-errors failed every test module at
   collection. `tools/fleet_dependabot_allow.py` inserts the block into each
   fleet repo's existing config without overwriting per-repo groups.
+- `tools/fleet_align_rulesets.py` brings every fleet repo's default-branch
+  ruleset and merge settings to the shape STANDARD.md describes: admin bypass
+  on the ruleset, auto-merge and delete-branch-on-merge on, and the standard
+  ruleset created where a canon-CI repo had none. A survey on 2026-09-08 found
+  21 of 47 repos drifted, mostly the August finite-sample adoptions, which is
+  why the Dependabot sweep had to merge outright there instead of arming, and
+  why a fleet file push was refused on 17 of them. Required checks are left to
+  `set-required-checks.sh`.
 - Reusable CI callers can set `test-timeout-minutes` and
   `wheel-timeout-minutes` when a complete test suite legitimately exceeds the
   default 30- and 20-minute job budgets. The defaults remain unchanged.
