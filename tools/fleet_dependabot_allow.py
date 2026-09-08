@@ -69,22 +69,28 @@ def main(repos: list[str], dry: bool) -> None:
         print(f"== {repo:32} insert on {branch}")
         if dry:
             continue
-        out = gh(
-            "api",
-            "-X",
-            "PUT",
-            f"repos/{repo}/contents/{path}",
-            "-f",
-            f"message={MESSAGE}",
-            "-f",
-            f"content={base64.b64encode(new.encode()).decode()}",
-            "-f",
-            f"branch={branch}",
-            "-f",
-            f"sha={meta['sha']}",
-            "--jq",
-            ".commit.html_url",
-        )
+        try:
+            out = gh(
+                "api",
+                "-X",
+                "PUT",
+                f"repos/{repo}/contents/{path}",
+                "-f",
+                f"message={MESSAGE}",
+                "-f",
+                f"content={base64.b64encode(new.encode()).decode()}",
+                "-f",
+                f"branch={branch}",
+                "-f",
+                f"sha={meta['sha']}",
+                "--jq",
+                ".commit.html_url",
+            )
+        except subprocess.CalledProcessError as exc:
+            # A protected branch refuses the direct write; say so and keep
+            # going, the rest of the fleet is not blocked by one ruleset.
+            print(f"   !! refused: {exc.stderr.strip().splitlines()[-1]}")
+            continue
         print(f"   -> {out.strip()}")
 
 
