@@ -11,6 +11,7 @@ Usage:  DRY_RUN=0 ./fleet_dependabot_allow.py [owner/repo ...]   (default: FLEET
 """
 
 import base64
+import contextlib
 import json
 import os
 import pathlib
@@ -86,12 +87,63 @@ def main(repos: list[str], dry: bool) -> None:
                 "--jq",
                 ".commit.html_url",
             )
-        except subprocess.CalledProcessError as exc:
-            # A protected branch refuses the direct write; say so and keep
-            # going, the rest of the fleet is not blocked by one ruleset.
-            print(f"   !! refused: {exc.stderr.strip().splitlines()[-1]}")
-            continue
+        except subprocess.CalledProcessError:
+            # Every fleet ruleset requires `ci / gate` on the default branch,
+            # but only the repos that also grant admins a bypass accept a
+            # direct write (26 of 43 on the first sweep). The rest need the
+            # change to arrive the way the ruleset expects: on a branch, as
+            # a PR, with auto-merge armed so gate lands it.
+            print("   direct write refused by ruleset; opening a PR instead")
+            out = via_pull_request(repo, branch, path, meta["sha"], new)
         print(f"   -> {out.strip()}")
+
+
+def via_pull_request(repo: str, base: str, path: str, sha: str, new: str) -> str:
+    head = "fleet/dependabot-transitive"
+    tip = gh("api", f"repos/{repo}/git/ref/heads/{base}", "--jq", ".object.sha").strip()
+    # A branch left over from an earlier sweep is reused.
+    with contextlib.suppress(subprocess.CalledProcessError):
+        gh(
+            "api",
+            "-X",
+            "POST",
+            f"repos/{repo}/git/refs",
+            "-f",
+            f"ref=refs/heads/{head}",
+            "-f",
+            f"sha={tip}",
+        )
+    gh(
+        "api",
+        "-X",
+        "PUT",
+        f"repos/{repo}/contents/{path}",
+        "-f",
+        f"message={MESSAGE}",
+        "-f",
+        f"content={base64.b64encode(new.encode()).decode()}",
+        "-f",
+        f"branch={head}",
+        "-f",
+        f"sha={sha}",
+    )
+    title, _, body = MESSAGE.partition("\n\n")
+    url = gh(
+        "pr",
+        "create",
+        "--repo",
+        repo,
+        "--base",
+        base,
+        "--head",
+        head,
+        "--title",
+        title,
+        "--body",
+        body,
+    ).strip()
+    gh("pr", "merge", "--repo", repo, "--auto", "--squash", url)
+    return url
 
 
 if __name__ == "__main__":
