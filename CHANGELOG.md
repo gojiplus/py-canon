@@ -35,6 +35,12 @@ not a release of its own.
   why the Dependabot sweep had to merge outright there instead of arming, and
   why a fleet file push was refused on 17 of them. Required checks are left to
   `set-required-checks.sh`.
+- `tools/fleet_python_floor.py` raises a fleet repo's `requires-python` to
+  the 3.12 floor STANDARD.md declares, editing every place the old floor is
+  pinned (ruff target, classifier, pyright, CI matrix), relocking, and opening
+  an auto-merging PR so CI decides. 24 of 47 repos still said `>=3.11` on
+  2026-09-08; gojiplus/gringotts's lower-bounds job could not resolve
+  py-canon 1.3.0 (itself `>=3.12`) under that floor.
 - Reusable CI callers can set `test-timeout-minutes` and
   `wheel-timeout-minutes` when a complete test suite legitimately exceeds the
   default 30- and 20-minute job budgets. The defaults remain unchanged.
