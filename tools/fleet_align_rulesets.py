@@ -15,6 +15,9 @@ CI, a repo-admin bypass for direct pushes, and auto-merge on. A survey on
    4  no ruleset at all. Three of them run the canon CI and get the
       standard ruleset; uijudge-bench does not and is left alone, because a
       repo with nothing required must not have auto-merge (STANDARD.md).
+   2  ruleset present and correct but enforcement "disabled" (the themains
+      repos). Found a day later: everything above passed, and auto-merge
+      still would not arm, because a disabled ruleset is no ruleset.
 
 Required checks are not touched here; that is set-required-checks.sh.
 GET-mutate-PUT on the ruleset, for the reason that script gives.
@@ -99,26 +102,37 @@ def align(repo: str, dry: bool) -> None:
             )
     else:
         ruleset = gh_json("api", f"repos/{repo}/rulesets/{branch_rulesets[0]['id']}")
+        payload = {
+            key: ruleset[key]
+            for key in (
+                "name",
+                "target",
+                "enforcement",
+                "conditions",
+                "bypass_actors",
+                "rules",
+            )
+        }
+        # A ruleset that exists but is switched off looks aligned to every
+        # check but this one, and to GitHub it is no ruleset at all: auto-merge
+        # refuses to arm ("Protected branch rules not configured"), so PRs sit
+        # green and unmerged. themains/piedomains and know-your-ip, 2026-09-08.
+        if ruleset.get("enforcement") != "active":
+            actions.append(f"set enforcement active (was {ruleset.get('enforcement')})")
+            payload["enforcement"] = "active"
         if not has_admin_bypass(ruleset):
             actions.append("add admin bypass")
-            if not dry:
-                payload = {
-                    key: ruleset[key]
-                    for key in ("name", "target", "enforcement", "conditions", "rules")
-                }
-                payload["bypass_actors"] = [
-                    *ruleset.get("bypass_actors", []),
-                    ADMIN_BYPASS,
-                ]
-                gh(
-                    "api",
-                    "-X",
-                    "PUT",
-                    f"repos/{repo}/rulesets/{ruleset['id']}",
-                    "--input",
-                    "-",
-                    stdin=json.dumps(payload),
-                )
+            payload["bypass_actors"] = [*ruleset.get("bypass_actors", []), ADMIN_BYPASS]
+        if payload != {k: ruleset[k] for k in payload} and not dry:
+            gh(
+                "api",
+                "-X",
+                "PUT",
+                f"repos/{repo}/rulesets/{ruleset['id']}",
+                "--input",
+                "-",
+                stdin=json.dumps(payload),
+            )
 
     settings = {
         key: True
