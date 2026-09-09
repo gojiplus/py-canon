@@ -274,6 +274,85 @@ jobs:
           fail-on-severity: high
           comment-summary-in-pr: never
 
+  # A feature branch that merges with a stale uv.lock silently downgrades
+  # everything Dependabot bumped since the branch was cut, and then Dependabot
+  # re-raises every one of those bumps. appeler/pranaam#48 (2026-08-16) took
+  # twelve packages back two weeks in one merge -- pandas 3.0.5 to 2.3.3,
+  # pandas-stubs, rich, ruff, sphinx and myst-parser among them -- and the
+  # Dependabot PRs that followed (#51-#55, #62, #64) were re-runs of ones
+  # already merged. One of those was still BLOCKED three weeks later. Nothing
+  # else in CI looks at the lock relative to the base branch, so this does.
+  #
+  # A deliberate downgrade is rare and should say so: label the PR
+  # `lock-downgrade-ok` and the job passes.
+  lock-regression:
+    name: Lock regression
+    if: >-
+      github.event_name == 'pull_request'
+      && !contains(github.event.pull_request.labels.*.name, 'lock-downgrade-ok')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - name: Fetch the base branch lock
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ ! -f uv.lock ]; then
+            echo "no uv.lock in this repo; nothing to compare"
+            exit 0
+          fi
+          git fetch --depth=1 origin "$BASE_SHA"
+          # A repo that only gained a lock on this branch has no base to
+          # regress from.
+          git show "$BASE_SHA:uv.lock" > /tmp/base.lock 2>/dev/null || : > /tmp/base.lock
+      - name: Compare locked versions against the base branch
+        # packaging, not string comparison: "3.0.5" must sort above "2.3.3"
+        # and "1.1.411" above "1.1.39". uv.lock can hold one package several
+        # times under different markers, so each side is reduced to its
+        # highest version per name before comparing.
+        run: |
+          uv run --no-project --with packaging python - /tmp/base.lock uv.lock <<'PY'
+          import sys
+          import tomllib
+
+          from packaging.version import Version
+
+
+          def versions(path):
+              with open(path, "rb") as fh:
+                  data = tomllib.load(fh)
+              highest = {}
+              for pkg in data.get("package", []):
+                  if "version" not in pkg:
+                      continue
+                  candidate = Version(pkg["version"])
+                  if pkg["name"] not in highest or candidate > highest[pkg["name"]]:
+                      highest[pkg["name"]] = candidate
+              return highest
+
+
+          base = versions(sys.argv[1])
+          head = versions(sys.argv[2])
+          downgrades = sorted(
+              (name, base[name], head[name])
+              for name in base.keys() & head.keys()
+              if head[name] < base[name]
+          )
+          if not downgrades:
+              print(f"no package pinned below the base branch ({len(head)} compared)")
+              raise SystemExit(0)
+          for name, was, now in downgrades:
+              print(f"::error::uv.lock pins {name} {now}, below {was} on the base branch")
+          print(
+              "This branch carries a stale uv.lock. Run `uv lock` on top of the base "
+              "branch, or label the PR lock-downgrade-ok if the downgrade is deliberate."
+          )
+          raise SystemExit(1)
+          PY
+
   # One stable context for rulesets to require, so the matrix can change
   # without silently orphaning a required check. Naming a matrix leg directly
   # in a ruleset is how naampy and outkast ended up requiring contexts that no
@@ -282,7 +361,7 @@ jobs:
   gate:
     name: gate
     if: always()
-    needs: [lint, test, wheel, workflow-security, dependency-review]
+    needs: [lint, test, wheel, workflow-security, dependency-review, lock-regression]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -291,6 +370,7 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           printf '%s\n' "$RESULTS"
-          # 'skipped' is legitimate -- dependency-review only runs on PRs.
+          # 'skipped' is legitimate -- dependency-review and lock-regression
+          # only run on PRs, and lock-regression also skips on the override label.
           printf '%s\n' "$RESULTS" \
             | jq -e 'all(.[].result; . == "success" or . == "skipped")'

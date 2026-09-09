@@ -11,6 +11,14 @@ not a release of its own.
 
 ### Added
 
+- A `lock-regression` job in the reusable CI fails a pull request whose
+  `uv.lock` pins any package below the version on the base branch, naming each
+  one. A feature branch merged with a stale lock silently downgrades everything
+  Dependabot bumped since the branch was cut, and Dependabot then re-raises
+  every one of those bumps: appeler/pranaam#48 took twelve packages back two
+  weeks and produced seven duplicate PRs. Label a PR `lock-downgrade-ok` when
+  the downgrade is deliberate. The job is part of `gate`, so no ruleset change
+  is needed.
 - Reusable CI callers can set `test-timeout-minutes` and
   `wheel-timeout-minutes` when a complete test suite legitimately exceeds the
   default 30- and 20-minute job budgets. The defaults remain unchanged.
