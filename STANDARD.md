@@ -187,8 +187,11 @@ Workflow hygiene baked into the shims/reusables: top-level
 
 ## Repo operations
 
-- Dependabot: weekly grouped patch/minor with 7-day cooldown. **Everything
-  Dependabot opens is eligible to auto-merge; CI decides whether it lands.**
+- Dependabot: weekly grouped patch/minor with 7-day cooldown, over direct
+  *and* transitive dependencies (`allow: dependency-type: all`; the default
+  only tracks what pyproject.toml names, so lock-only pins rot until an
+  advisory or an upstream floor forces them). **Everything Dependabot opens
+  is eligible to auto-merge; CI decides whether it lands.**
   The sweep merges only when every check is terminal and none failed.
   - This used to hold Python majors for a human, and — because grouped security
     PRs report the group name rather than `minor-and-patch` — held major

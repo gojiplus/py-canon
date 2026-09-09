@@ -19,6 +19,14 @@ not a release of its own.
   weeks and produced seven duplicate PRs. Label a PR `lock-downgrade-ok` when
   the downgrade is deliberate. The job is part of `gate`, so no ruleset change
   is needed.
+- The Dependabot template tracks transitive dependencies too
+  (`allow: dependency-type: all`). The default only follows what
+  pyproject.toml names, so lock-only pins sat untouched until something
+  upstream complained: gojiplus/reporoulette carried grpcio 1.76 for eleven
+  months until google-auth 2.57 began warning at import that 1.83 is the
+  floor, which with warnings-as-errors failed every test module at
+  collection. `tools/fleet_dependabot_allow.py` inserts the block into each
+  fleet repo's existing config without overwriting per-repo groups.
 - Reusable CI callers can set `test-timeout-minutes` and
   `wheel-timeout-minutes` when a complete test suite legitimately exceeds the
   default 30- and 20-minute job budgets. The defaults remain unchanged.
