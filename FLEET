@@ -17,7 +17,6 @@ finite-sample/onlinerake
 finite-sample/optimal-classification-cutoffs
 finite-sample/preclink
 finite-sample/pyppur
-finite-sample/pysum
 finite-sample/rank-preserving-calibration
 finite-sample/rmcp
 finite-sample/setjoin
