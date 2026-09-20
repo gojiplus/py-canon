@@ -134,12 +134,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api "repos/${GH_REPO}/rulesets" --jq '.[].id' 2>/dev/null \
-            | while read -r id; do
+          gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt
+          while read -r id; do
                 gh api "repos/${GH_REPO}/rulesets/${id}" --jq \
                   '.rules[]? | select(.type=="required_status_checks")
-                   | .parameters.required_status_checks[].context' 2>/dev/null
-              done | sort -u > required.txt || true
+                   | .parameters.required_status_checks[].context'
+          done < ruleset-ids.txt | sort -u > required.txt
           count=$(wc -l < required.txt | tr -d ' ')
           echo "required contexts: $(tr '\n' ' ' < required.txt)"
           if [ "$count" = "0" ]; then
@@ -193,10 +193,8 @@ jobs:
             *"workflows"*"permission"*)
               echo "::warning::${PR_URL} edits a workflow file, which this token may not merge. Needs a human; nothing here is broken." ;;
             *)
-              echo "::warning::merge declined, reason not recognised; leaving the PR open. Message above." ;;
+              echo "::error::unexpected merge failure: $err"; exit 1 ;;
           esac
-          # Unconditional on purpose: everything reaching here is GitHub
-          # declining, which is an outcome. Malfunctions were caught above.
           exit 0
 
       - name: Flag ineligible updates for manual review
@@ -233,12 +231,12 @@ jobs:
           # cancelled by a concurrency collision -- and the PR sat BLOCKED for
           # weeks looking entirely green. Counting reported checks cannot see
           # that; comparing against the requirement can.
-          gh api "repos/${GH_REPO}/rulesets" --jq '.[].id' 2>/dev/null \
-            | while read -r id; do
+          gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt
+          while read -r id; do
                 gh api "repos/${GH_REPO}/rulesets/${id}" --jq \
                   '.rules[]? | select(.type=="required_status_checks")
-                   | .parameters.required_status_checks[].context' 2>/dev/null
-              done | sort -u > required.txt || true
+                   | .parameters.required_status_checks[].context'
+          done < ruleset-ids.txt | sort -u > required.txt
           echo "required contexts: $(tr '\n' ' ' < required.txt)"
 
       # Decide per PR, print one line for every one of them, and act. Check
@@ -256,104 +254,64 @@ jobs:
           stale_after = dt.timedelta(hours=float(os.environ["STALE_AFTER_HOURS"]))
           now = dt.datetime.now(dt.UTC)
 
-          def check_state(pr):
-              """Terminal-and-green, still-running, or failing."""
-              rollup = pr.get("statusCheckRollup") or []
-              if not rollup:
-                  return "no-checks"
-              states = []
-              for c in rollup:
-                  # CheckRun reports status/conclusion; StatusContext reports state.
-                  if c.get("__typename") == "StatusContext" or "state" in c:
-                      states.append(c.get("state") or "PENDING")
-                  elif (c.get("status") or "").upper() != "COMPLETED":
-                      states.append("PENDING")
+          def check_results(pr):
+              results = {}
+              for check in pr.get("statusCheckRollup") or []:
+                  name = check.get("name") or check.get("context") or "unnamed check"
+                  if "state" in check:
+                      result = check.get("state") or "PENDING"
+                  elif check.get("status") != "COMPLETED":
+                      result = "PENDING"
                   else:
-                      states.append((c.get("conclusion") or "PENDING").upper())
-              if any(s == "PENDING" for s in states):
-                  return "running"
-              return "green" if all(s in TERMINAL_OK for s in states) else "failing"
+                      result = check.get("conclusion") or "PENDING"
+                  results.setdefault(name, []).append(result.upper())
+              return results
 
-          def never_reported(pr):
-              """Required contexts with no check run at all on this PR."""
-              seen = {c.get("name") or c.get("context") for c in
-                      (pr.get("statusCheckRollup") or [])}
-              return sorted(required - seen)
-
-          try:
-              required = {ln.strip() for ln in open("required.txt") if ln.strip()}
-          except OSError:
-              required = set()
-
+          required = {line.strip() for line in open("required.txt") if line.strip()}
+          summary = ["## Dependabot recovery", "", "| PR | Action | Status |",
+                     "| --- | --- | --- |"]
           for pr in json.load(open("prs.json")):
               n = pr["number"]
               age = now - dt.datetime.fromisoformat(pr["createdAt"].replace("Z", "+00:00"))
-              # No label check. The label existed to carry the major-versus-
-              # minor verdict from the pull_request context, where Dependabot
-              # metadata is readable, into this one, where it is not. Now that
-              # every update is eligible and CI decides, there is no verdict to
-              # carry -- and the label had become the thing blocking recovery:
-              # `on: pull_request` does not retro-fire, so a PR opened before
-              # this workflow reached a repo could never acquire it. On
-              # notnews/notnews the sweep declined all eight open PRs as
-              # "ineligible (no policy label)", the oldest 469 hours old.
-              #
-              # The listing is already `--author app/dependabot`, so authorship
-              # is the eligibility test, and it is one this context can see.
-              if pr.get("autoMergeRequest"):
-                  verdict, act = "already armed", "none"
-              elif pr["mergeStateStatus"] in {"DIRTY", "DRAFT"}:
-                  # A conflict or a draft is unmergeable for everyone, and no
-                  # amount of asking changes that.
-                  verdict, act = f"not mergeable ({pr['mergeStateStatus']})", "none"
+              results = check_results(pr)
+              missing = sorted(required - results.keys())
+              failed = sorted(name for name, states in results.items()
+                              if any(state not in TERMINAL_OK | {"PENDING", "EXPECTED"}
+                                     for state in states))
+              running = sorted(name for name, states in results.items()
+                               if any(state in {"PENDING", "EXPECTED"} for state in states))
+              blockers = []
+              if pr["mergeStateStatus"] in {"DIRTY", "DRAFT"}:
+                  blockers.append(f"not mergeable ({pr['mergeStateStatus']})")
+              if missing:
+                  blockers.append("required checks missing: " + ", ".join(missing))
+              if failed:
+                  blockers.append("checks failing: " + ", ".join(failed))
+              if not results:
+                  blockers.append("no checks reported")
+              armed = bool(pr.get("autoMergeRequest"))
+              if blockers:
+                  verdict, act = "; ".join(blockers), "none"
+              elif running:
+                  verdict = "checks running: " + ", ".join(running)
+                  act = "arm" if required and not armed else "none"
               else:
-                  # Everything else -- CLEAN and BLOCKED alike -- is decided by
-                  # the checks, not by mergeStateStatus.
-                  #
-                  # BLOCKED used to end the decision here. It should not:
-                  # GitHub computes it for the *viewer*, and GITHUB_TOKEN
-                  # cannot bypass a ruleset, so a PR a maintainer sees as CLEAN
-                  # reads BLOCKED to this job. Treating that as final made the
-                  # merge path unreachable in any repo whose ruleset the token
-                  # cannot bypass: the sweep could arm, but never land.
-                  # Measured on finite-sample/rmcp, where #63 and #58 had all
-                  # three required contexts green, this step reported "not
-                  # mergeable (BLOCKED)" on two consecutive runs, and both
-                  # merged instantly when simply asked.
-                  #
-                  # What is worth checking is whether a required context never
-                  # reported at all -- "BLOCKED" otherwise sends a reader
-                  # looking for a failing check that does not exist. Past that,
-                  # ask GitHub and let it refuse: it is the authority on its
-                  # own rules, a refusal costs one API call, and the arm-or-land
-                  # step already downgrades a refusal to a warning.
-                  absent = never_reported(pr)
-                  if absent:
-                      verdict, act = (
-                          f"not mergeable (required never ran: {','.join(absent)})",
-                          "none",
-                      )
-                  else:
-                      state = check_state(pr)
-                      blocked = pr["mergeStateStatus"] == "BLOCKED"
-                      verdict, act = {
-                          "green": ("checks terminal and green", "merge"),
-                          "running": ("checks still running", "arm"),
-                          "failing": ("checks failing", "none"),
-                          "no-checks": ("no checks reported", "none"),
-                      }[state]
-                      if blocked and act != "none":
-                          verdict += " (BLOCKED for this token; asking anyway)"
-              # Only shout when the sweep is unable to act. A PR being merged
-              # on this very run is not stranded, however old it is.
+                  verdict = "checks terminal and green"
+                  act = "none" if armed else "merge"
+              if armed:
+                  verdict += "; auto-merge enabled"
               stale = act == "none" and age > stale_after
               print(f"{n}\t{act}\t{verdict}\t{int(age.total_seconds()//3600)}h\t{int(stale)}")
+              safe_verdict = verdict.replace("|", "\\|").replace("\n", " ")
+              summary.append(f"| [#{n}]({pr['url']}) | {act} | {safe_verdict} |")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as report:
+              report.write("\n".join(summary) + "\n")
           PY
           printf '%-6s %-6s %-32s %6s\n' "PR" "ACTION" "VERDICT" "AGE"
           while IFS=$'\t' read -r n act verdict age stale; do
             printf '%-6s %-6s %-32s %6s\n' "#$n" "$act" "$verdict" "$age"
             if [ "$stale" = "1" ]; then
-              echo "::warning::PR #$n is eligible but still unmerged after ${age} — automation has not been able to land it"
+              echo "::warning::PR #$n remains open after ${age}: ${verdict}"
             fi
           done < actions.txt
 
@@ -370,8 +328,10 @@ jobs:
             case "$2" in
               *"workflows"*"permission"*)
                 echo "::warning::#$1 edits a workflow file, which this token may not merge. Needs a human; the sweep is working." ;;
-              *)
+              *"clean status"*|*"not mergeable"*|*"Auto merge is not allowed"*|*"base branch policy"*)
                 echo "::warning::could not $3 #$1: $2" ;;
+              *)
+                echo "::error::could not $3 #$1: $2"; return 1 ;;
             esac
           }
           acted=0
