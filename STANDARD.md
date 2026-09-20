@@ -218,7 +218,7 @@ Workflow hygiene baked into the shims/reusables: top-level
 - **Required contexts must match the contexts CI actually emits.** Naming
   matrix legs in a ruleset means the next matrix change silently orphans a
   required check and blocks every PR. Require the aggregate `ci / gate`
-  context instead. Audit with `tools/dependabot_backfill.py`, which reports
+  context instead. Audit with the scheduled Dependabot recovery workflow, which reports
   contexts that never report on any open PR.
 - Ruleset on the default branch: CI checks required for PR merges; repo-admin
   bypass for direct pushes.

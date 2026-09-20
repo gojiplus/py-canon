@@ -9,6 +9,14 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Fixed
+
+- Dependabot recovery reports failed and missing checks and merge conflicts
+  even when auto-merge is already enabled. Each sweep writes a linked summary;
+  authentication and unexpected API failures fail the job.
+- Retired the separate Dependabot backfill script; dispatch the shared recovery
+  workflow to process existing PRs using the same policy as scheduled runs.
+
 ### Added
 
 - A `lock-regression` job in the reusable CI fails a pull request whose
