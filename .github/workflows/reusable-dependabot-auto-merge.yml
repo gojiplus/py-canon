@@ -135,12 +135,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt
-          cat ruleset-ids.txt \
-            | while read -r id; do
+          while read -r id; do
                 gh api "repos/${GH_REPO}/rulesets/${id}" --jq \
                   '.rules[]? | select(.type=="required_status_checks")
                    | .parameters.required_status_checks[].context'
-              done | sort -u > required.txt
+          done < ruleset-ids.txt | sort -u > required.txt
           count=$(wc -l < required.txt | tr -d ' ')
           echo "required contexts: $(tr '\n' ' ' < required.txt)"
           if [ "$count" = "0" ]; then
@@ -233,12 +232,11 @@ jobs:
           # weeks looking entirely green. Counting reported checks cannot see
           # that; comparing against the requirement can.
           gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt
-          cat ruleset-ids.txt \
-            | while read -r id; do
+          while read -r id; do
                 gh api "repos/${GH_REPO}/rulesets/${id}" --jq \
                   '.rules[]? | select(.type=="required_status_checks")
                    | .parameters.required_status_checks[].context'
-              done | sort -u > required.txt
+          done < ruleset-ids.txt | sort -u > required.txt
           echo "required contexts: $(tr '\n' ' ' < required.txt)"
 
       # Decide per PR, print one line for every one of them, and act. Check
