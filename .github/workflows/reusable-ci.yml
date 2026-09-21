@@ -124,7 +124,9 @@ jobs:
         # nothing and cost the lint job its 15-minute budget on repos whose
         # suites are slow -- finite-sample/calibre's lint was cancelled at
         # 15m15s while pytest was still going.
-        run: uvx preen check --strict --skip tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: uvx --from preen==0.6.2 preen check --strict --skip tests
 
   test:
     runs-on: ${{ matrix.os }}
