@@ -11,6 +11,10 @@ not a release of its own.
 
 ### Fixed
 
+- Pinned Preen 0.6.2 in reusable CI so a newly published conformance rule
+  cannot change every caller's required checks without a reviewed py-canon
+  update, and authenticated its GitHub link checks to avoid anonymous
+  throttling failures.
 - Dependabot recovery reports failed and missing checks and merge conflicts
   even when auto-merge is already enabled. Each sweep writes a linked summary;
   authentication and unexpected API failures fail the job.
