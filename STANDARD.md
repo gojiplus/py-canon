@@ -12,7 +12,39 @@ change to every adopted repo.
 | CI / docs / release logic | Reusable workflows in this repo, called via `@v1` | Instant — next workflow run |
 | Sphinx configuration | `from py_canon.sphinx import configure` (git dependency) | Next docs build after lock refresh |
 | pre-commit hooks | Standard config referencing upstream hooks | `pre-commit autoupdate` / template sync |
-| pyproject `[tool.*]`, scaffolding | Copier template (`template/`) | `copier update` PRs, landed by guarded auto-merge |
+| pyproject `[tool.*]`, scaffolding | Copier template (`template/`) | Explicit adoption/update with a reviewed diff; existing moving-tag baselines need migration |
+
+## Authority and conformance
+
+STANDARD.md defines the Python fleet requirements. Workflows, templates, shared
+Python code, and preen checks implement selected requirements; disagreements
+between them are defects to reconcile against the stated rule. Preen's own
+release version is distinct from the py-canon revision it checks. Appellation
+adds name-analysis result and evidence requirements; it does not replace this
+package-engineering baseline.
+
+| Requirement area | Implementation | Verification |
+| --- | --- | --- |
+| Build, lint, tests, and installed artifacts | Reusable workflows | Workflow regression tests and the generated-consumer smoke job |
+| Materialized project configuration | Copier template and preen adoption | Template consumer checks and preen's synchronization tests |
+| Documentation configuration | `py_canon.sphinx` | A real Sphinx build in `tests/test_sphinx_config.py` |
+| Repository drift | Preen and fleet triage | Named findings plus consumer CI; fleet membership alone is not conformance |
+
+A conformance report identifies the consumer commit, py-canon revision, preen
+version, executed checks, omissions, and relevant CI runs. A partial check is
+not a full assessment; unavailable checks remain unverified. Exceptions need
+a reason and a condition for removal, and do not turn a failed rule into a pass.
+
+Changes to a requirement must update affected implementations, examples, and
+regression tests in the same change or linked coordinated changes. Test the
+candidate template and workflows, not only the last released versions. Run a
+positive consumer and a case violating the changed rule. Record migration
+consequences and checks that remain outside the local test coverage.
+
+Release tags identify immutable snapshots. Moving major tags are update
+channels; record resolved commits in audit evidence and refresh dependency
+locks to receive changes. Both CI promotion and the separate major-tag workflow
+require successful candidate CI before exposing a revision to consumers.
 
 ## Toolchain
 
@@ -151,8 +183,9 @@ forces the reader to reconstruct its meaning.
   environment `pypi`; delete old publishing workflows instead of preserving
   filename-specific exceptions. Repos with no publisher need one standard
   trusted-publisher entry before their first release.
-- CHANGELOG is the generated release notes; curate in the GitHub Release when
-  it matters.
+- Keep a CHANGELOG.md entry for each release, with `[Unreleased]` for pending
+  changes, as the template and preen release gate require. Generated GitHub
+  Release notes supplement that record; they do not replace it.
 
 ## CI (via reusable workflows)
 
@@ -262,7 +295,8 @@ turns a check off is not a conformance fix; it is the removal of one.
 
 Prevention: canon changes are gated by canon's own CI (including a
 template-consumer smoke test and actionlint); the fleet-facing `v1` tag is
-advanced **only by the promote workflow after green CI** — never by hand.
+advanced by the promote job after green CI, or by the major-tag workflow
+after it verifies successful CI for the same default-branch commit.
 Breaking standard changes go to `v2`, not a mutated `v1`.
 
 Detection: every repo's CI runs weekly on cron (dormant repos surface
