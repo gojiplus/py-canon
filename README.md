@@ -31,7 +31,7 @@ Two known gaps, both measured rather than assumed:
 - **The Sphinx layer goes stale.** `py-canon @ git+...@v1` moves, but `uv.lock`
   freezes the commit it resolved to. `gojiplus/sharepack` was pinned eighteen
   commits behind the `v1` it claims to track. A lock refresh is what lands it.
-- **`copier update` does not currently propagate anything.** Repos record
+- **Older moving-tag Copier baselines can prevent updates.** Those repos record
   `_commit: v1`, a *moving* tag, so copier compares `v1` against `v1` and
   reports "Keeping template version 1". When it does act it can delete: on
   `appeler/naamkaran` it removed `Citation.cff` outright, because the repo
@@ -54,5 +54,10 @@ uvx preen new mypackage  # scaffold a new one
 
 `uv version X.Y.Z` updates the `py-canon` package version. A matching
 `vX.Y.Z` tag releases that version. Repos reference the moving major tag `v1`
-for reusable workflows and the template; breaking changes to the standard
-bump that tag to `v2`.
+for reusable workflows. Template adoption records a concrete release baseline;
+old `_commit: v1` entries need migration before updates are reliable. Breaking
+changes use a new major channel such as `v2`; immutable release tags and the
+resolved workflow commit identify what an assessment tested.
+
+[Authority and conformance](STANDARD.md#authority-and-conformance) separates
+requirements from implementation and defines evidence for conformance claims.

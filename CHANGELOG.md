@@ -20,6 +20,11 @@ not a release of its own.
   authentication and unexpected API failures fail the job.
 - Retired the separate Dependabot backfill script; dispatch the shared recovery
   workflow to process existing PRs using the same policy as scheduled runs.
+- Major-tag promotion now requires a successful default-branch CI run for the
+  target commit; missing, pending, failed, or unavailable evidence blocks it.
+- Reconcile changelog and template-propagation rules with the shipped template
+  and preen behavior. Define authority, assessment scope, revision provenance,
+  and coordinated requirement changes.
 
 ### Added
 
