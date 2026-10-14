@@ -89,8 +89,13 @@ def configure(
         # Theme
         html_theme="furo",
         html_title=project,
-        # Autodoc / autosummary
+        # Autodoc / autosummary. The shared templates give generated pages
+        # short titles ("fsm", not "pkg.fsm") and list a module's public API
+        # (its __all__) as summary tables, one page per object.
+        templates_path=[str(Path(__file__).parent / "sphinx_templates")],
+        add_module_names=False,
         autosummary_generate=True,
+        autosummary_ignore_module_all=False,
         autodoc_typehints="description",
         autodoc_member_order="bysource",
         # Napoleon: google style only

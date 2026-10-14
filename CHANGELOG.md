@@ -9,6 +9,15 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Changed
+
+- Docs carry content, not just configuration. The template's home page
+  includes the README (after a `<!-- SPHINX-START -->` marker), the API page is
+  an autosummary reference with one page per public object from `__all__`, and
+  a changelog page includes `CHANGELOG.md`. `configure()` ships short-title
+  autosummary templates. STANDARD.md now says what a docs site must contain,
+  including a tested user guide for packages with more than one workflow.
+
 ### Fixed
 
 - Pinned Preen 0.6.2 in reusable CI so a newly published conformance rule
