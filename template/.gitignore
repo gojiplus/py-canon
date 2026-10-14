@@ -8,5 +8,6 @@ build/
 .ruff_cache/
 .coverage
 docs/_build/
+docs/generated/
 _site/
 .DS_Store

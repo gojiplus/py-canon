@@ -22,6 +22,11 @@ def test_configure_populates_namespace(tmp_path: Path) -> None:
     assert namespace["html_theme"] == "furo"
     assert "sphinx.ext.napoleon" in namespace["extensions"]
     assert namespace["napoleon_numpy_docstring"] is False
+    # Generated API pages: short titles, public API taken from __all__.
+    templates = Path(namespace["templates_path"][0])
+    assert (templates / "autosummary" / "module.rst").is_file()
+    assert namespace["add_module_names"] is False
+    assert namespace["autosummary_ignore_module_all"] is False
 
 
 def test_configure_overrides_win(tmp_path: Path) -> None:
