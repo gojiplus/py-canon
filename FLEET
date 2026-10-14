@@ -11,6 +11,7 @@ finite-sample/alsgls
 finite-sample/calibre
 finite-sample/fairlex
 finite-sample/fewlab
+finite-sample/finite-selection
 finite-sample/hbw
 finite-sample/incline
 finite-sample/onlinerake
