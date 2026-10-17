@@ -5,7 +5,7 @@ expensive part — opening the run, finding the failed step, reading the log,
 deciding who owns the fix — to a human, once per repo, every day.
 
 Everything that step does mechanically is done here instead. What is left for
-a person is the judgement the classifier deliberately does not attempt.
+a person is the judgment the classifier deliberately does not attempt.
 
 The classifier is a pure function (:func:`classify`) over a
 :class:`RepoStatus`, so the rules are unit-tested rather than discovered in
@@ -35,7 +35,7 @@ from pathlib import Path
 # standard's naming, so the scan cannot assume `CI`.
 CI_WORKFLOW_NAMES = frozenset({"CI", "ci", "test", "Test", "tests", "Tests"})
 
-# Conclusions that mean red. `cancelled` is excluded on purpose: a cancelled
+# Conclusions that mean red. `cancelled` is excluded on purpose: a canceled
 # run is usually a superseded push or a sibling matrix leg being torn down by
 # fail-fast, and treating those as failures makes the issue cry wolf.
 RED_CONCLUSIONS = frozenset({"failure", "startup_failure", "timed_out"})

@@ -122,7 +122,7 @@ jobs:
         # --skip tests: the test job below already runs the suite, across the
         # whole matrix and with coverage. Running it a second time here bought
         # nothing and cost the lint job its 15-minute budget on repos whose
-        # suites are slow -- finite-sample/calibre's lint was cancelled at
+        # suites are slow -- finite-sample/calibre's lint was canceled at
         # 15m15s while pytest was still going.
         env:
           GITHUB_TOKEN: ${{ github.token }}

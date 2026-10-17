@@ -106,3 +106,8 @@ link_ignore = [
     # A host the docs cite correctly must not gate every PR in the repo.
     "scientific-python\\.org/",
 ]
+
+[tool.codespell]
+builtin = "clear,rare,en-GB_to_en-US"
+# Preserve GitHub conclusions and its workflow expression function.
+ignore-regex = '''["'`](?i:cancelled|cancelling)["'`]|\bcancelled(?=\(\))'''  # codespell:ignore cancelled,cancelling

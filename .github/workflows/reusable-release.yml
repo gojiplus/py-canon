@@ -25,7 +25,7 @@ on:
         # exact commit being published rather than trusting that CI saw it.
         # It usually did -- but "usually" is doing real work in that sentence:
         # a tag can point at a commit pushed straight to the default branch, at
-        # an older commit, or at one whose CI run was cancelled, and none of
+        # an older commit, or at one whose CI run was canceled, and none of
         # those look any different from here.
         #
         # Costs one test run per release, which happens a few times a year.

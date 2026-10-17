@@ -81,7 +81,7 @@ not a release of its own.
   guess looked for `optimal_classification_cutoffs/`, found nothing, and
   hard-errored — the adoption had to pass `run-pydoclint: false` on a package
   that is clean under pydoclint 0.9.1, so a conforming repo silently lost the
-  check. `module-root` is honoured too.
+  check. `module-root` is honored too.
 
 ### Fixed
 
@@ -171,7 +171,7 @@ not a release of its own.
 
 - The lint job runs `preen check --strict --skip tests`. Preen's `tests` check
   re-ran the whole pytest suite inside a job budgeted for linting, duplicating
-  work the test matrix already does with coverage — and cancelling the lint job
+  work the test matrix already does with coverage — and canceling the lint job
   at its 15-minute timeout on repos with slow suites.
 
 ## [1.1.0] - 2026-08-19

@@ -21,7 +21,7 @@ pin dependencies. The load-bearing question is whether the thing is *published*:
 Several of the 20 are plainly not packages on inspection: `in-rolls/assam_elex_rolls_2026` is
 electoral-roll dataset work, `notnews/bench_marks` is a benchmark harness. Others are genuine
 packages that simply have not shipped yet — `gojiplus/py-canon` and `finite-sample/simcheck`
-among them. The 20 need a per-repo judgement rather than a rule.
+among them. The 20 need a per-repo judgment rather than a rule.
 
 Adoption among the **47 published** packages:
 
@@ -112,7 +112,7 @@ true.
 |---|---|--:|
 | **adopt** | published packages not yet on canon CI | **32** |
 | **done** | published and on canon CI | 15 |
-| **judgement needed** | importable, not published — ship them or reclassify | 15 |
+| **judgment needed** | importable, not published — ship them or reclassify | 15 |
 | **exempt, with a reason** | published packages the template would break — `rmcp` | 1 known |
 | **out of scope** | scripts, analyses, apps, Actions, and the 5 above | ~220 |
 

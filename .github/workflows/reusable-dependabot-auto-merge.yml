@@ -120,7 +120,7 @@ jobs:
       # `--auto` merges on the spot -- green, red, or still running.
       #
       # Measured: finite-sample/alsgls#37 was armed here and merged four
-      # minutes later carrying `FAILURE test (3.12)` and two cancelled legs. It
+      # minutes later carrying `FAILURE test (3.12)` and two canceled legs. It
       # took a ruff 0.7 -> 0.16 bump onto main and left the branch failing
       # `ruff format --check` for hours. Nothing reported it, because a push
       # made with GITHUB_TOKEN does not trigger workflows, so no CI ran on the
@@ -176,7 +176,7 @@ jobs:
           # to wait for -- and `--auto` fell through to merging on the spot,
           # which GitHub also refused, because this token may not edit workflow
           # files. That is not configurable: `workflows` is not among the
-          # permissions a workflow can request. The step did not recognise the
+          # permissions a workflow can request. The step did not recognize the
           # message, exited 1, and the red job became a check on the PR. The
           # sweep below then read that failure as a failing check and declined
           # to touch it. One run, stuck for good.
@@ -228,7 +228,7 @@ jobs:
           # green rollup is not the same as a satisfied ruleset: on
           # appeler/pranaam#10 all seven reported checks passed while the
           # required `build` context never ran at all -- its workflow had been
-          # cancelled by a concurrency collision -- and the PR sat BLOCKED for
+          # canceled by a concurrency collision -- and the PR sat BLOCKED for
           # weeks looking entirely green. Counting reported checks cannot see
           # that; comparing against the requirement can.
           gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt

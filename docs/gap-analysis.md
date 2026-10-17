@@ -6,7 +6,7 @@ should settle first — moving a fleet twice is the expensive mistake.
 Compared against three external references, chosen because each covers something the others do
 not:
 
-- **[sp-repo-review](https://github.com/scientific-python/repo-review)** — the closest analogue to
+- **[sp-repo-review](https://github.com/scientific-python/repo-review)** — the closest analog to
   `preen`: a checker that runs rules against a repository, from the
   [Scientific Python Development Guide](https://learn.scientific-python.org/development/).
 - **[SPEC 0](https://scientific-python.org/specs/spec-0000/)** — the ecosystem's written policy on
@@ -140,7 +140,7 @@ compensating control is that CI is required and auto-merge never approves (`STAN
 **No fuzzing** (Scorecard `Fuzzing`). Appropriate for libraries parsing untrusted input; most of
 this fleet does not.
 
-**`Contributors` (two or more organisations)** is unreachable for a personal fleet and should not
+**`Contributors` (two or more organizations)** is unreachable for a personal fleet and should not
 be treated as a gap.
 
 ---
