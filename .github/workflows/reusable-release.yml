@@ -91,6 +91,7 @@ jobs:
           import tomllib
 
           from packaging.specifiers import SpecifierSet
+          from packaging.utils import canonicalize_name as canon
 
           try:
               with open("pyproject.toml", "rb") as handle:
@@ -99,12 +100,13 @@ jobs:
               data = {}
           specs = [data.get("project", {}).get("requires-python", "")]
           uv_table = data.get("tool", {}).get("uv", {})
-          groups = uv_table.get("dependency-groups", {})
-          names = set(os.environ.get("FLOOR_GROUPS", "").split())
+          # Group names compare normalized, as the dependency-groups spec says.
+          groups = {canon(k): v for k, v in uv_table.get("dependency-groups", {}).items()}
+          names = {canon(g) for g in os.environ.get("FLOOR_GROUPS", "").split()}
           # Jobs whose uv sync or bare uv run also installs the default groups.
           if os.environ.get("FLOOR_DEFAULTS") == "true":
               defaults = uv_table.get("default-groups", ["dev"])
-              names |= set(groups) if defaults == "all" else set(defaults)
+              names |= set(groups) if defaults == "all" else {canon(g) for g in defaults}
           for name in sorted(names):
               specs.append(groups.get(name, {}).get("requires-python", ""))
           spec = SpecifierSet(",".join(s for s in specs if s))
@@ -182,6 +184,7 @@ jobs:
           import tomllib
 
           from packaging.specifiers import SpecifierSet
+          from packaging.utils import canonicalize_name as canon
 
           try:
               with open("pyproject.toml", "rb") as handle:
@@ -190,12 +193,13 @@ jobs:
               data = {}
           specs = [data.get("project", {}).get("requires-python", "")]
           uv_table = data.get("tool", {}).get("uv", {})
-          groups = uv_table.get("dependency-groups", {})
-          names = set(os.environ.get("FLOOR_GROUPS", "").split())
+          # Group names compare normalized, as the dependency-groups spec says.
+          groups = {canon(k): v for k, v in uv_table.get("dependency-groups", {}).items()}
+          names = {canon(g) for g in os.environ.get("FLOOR_GROUPS", "").split()}
           # Jobs whose uv sync or bare uv run also installs the default groups.
           if os.environ.get("FLOOR_DEFAULTS") == "true":
               defaults = uv_table.get("default-groups", ["dev"])
-              names |= set(groups) if defaults == "all" else set(defaults)
+              names |= set(groups) if defaults == "all" else {canon(g) for g in defaults}
           for name in sorted(names):
               specs.append(groups.get(name, {}).get("requires-python", ""))
           spec = SpecifierSet(",".join(s for s in specs if s))

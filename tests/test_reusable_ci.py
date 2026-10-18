@@ -564,6 +564,8 @@ GROUPS = '[tool.uv.dependency-groups]\n{group} = {{requires-python = "{floor}"}}
     [
         # lint's later bare `uv run` installs the configured default groups
         ("reusable-ci/lint", 'default-groups = ["ops"]\n', "ops", ">=3.13", "3.13"),
+        # group names compare normalized: "Ops" names the group "ops"
+        ("reusable-docs/build", 'default-groups = ["Ops"]\n', "ops", ">=3.13", "3.13"),
         # docs' `uv sync --group docs` keeps the defaults, which are dev unless set
         ("reusable-docs/build", "", "dev", ">=3.13", "3.13"),
         ("reusable-docs/build", "default-groups = []\n", "dev", ">=3.14", "3.12"),
