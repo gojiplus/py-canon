@@ -454,37 +454,58 @@ def test_jobs_without_a_matrix_python_pin_the_package_floor() -> None:
 
 
 @pytest.mark.parametrize(
-    ("requires_python", "preset", "written"),
+    ("pyproject", "extra_file", "preset", "minor"),
     [
-        (">=3.13", None, "UV_PYTHON=3.13"),
-        (">=3.12,<3.15", None, "UV_PYTHON=3.12"),
-        ("~=3.13", None, "UV_PYTHON=3.13"),
-        ("==3.14.*", None, "UV_PYTHON=3.14"),
-        (None, None, ""),
-        (">=3.13", "3.14", ""),  # a caller's pin wins
+        ('requires-python = ">=3.13"', None, None, "3.13"),
+        ('requires-python = ">=3.12,<3.15"', None, None, "3.12"),
+        ('requires-python = "~=3.13"', None, None, "3.13"),
+        ('requires-python = "==3.14.*"', None, None, "3.14"),
+        ('requires-python = ">=3.12,!=3.12.*"', None, None, "3.13"),
+        ('requires-python = ">=3.12,>=3.13"', None, None, "3.13"),
+        ('requires-python = ">=3.12.12"', None, None, "3.12"),
+        (
+            'requires-python = ">=3.12"\n'
+            '[tool.uv.dependency-groups]\ndev = {requires-python = ">=3.13"}',
+            None,
+            None,
+            "3.13",
+        ),
+        ("", None, None, None),  # no requires-python: uv chooses, as before
+        ('requires-python = ">=3.13"', None, "3.14", None),  # a caller's pin wins
+        ('requires-python = ">=3.12"', ".python-version", None, None),  # so does this
     ],
 )
-def test_the_floor_step_sets_uv_python(
-    requires_python, preset, written, tmp_path
+def test_the_floor_step_requests_the_lowest_allowed_python(
+    pyproject, extra_file, preset, minor, tmp_path
 ) -> None:
     script = next(
         s["run"]
         for s in _floor_jobs()["reusable-ci/lint"]
         if s.get("name") == FLOOR_STEP
     )
-    project = 'name = "demo"\n' + (
-        f'requires-python = "{requires_python}"\n' if requires_python else ""
-    )
-    (tmp_path / "pyproject.toml").write_text("[project]\n" + project)
+    body = pyproject.split("\n[tool", 1)
+    toml = '[project]\nname = "demo"\n' + body[0] + "\n"
+    if len(body) > 1:
+        toml += "[tool" + body[1] + "\n"
+    (tmp_path / "pyproject.toml").write_text(toml)
+    if extra_file:
+        (tmp_path / extra_file).write_text("3.13\n")
     github_env = tmp_path / "github_env"
     github_env.touch()
     env = {"PATH": os.environ["PATH"], "GITHUB_ENV": str(github_env)}
+    if "HOME" in os.environ:
+        env["HOME"] = os.environ["HOME"]
     if preset:
         env["UV_PYTHON"] = preset
-
     bash = shutil.which("bash")
     assert bash is not None
+
     # The script is this repository's own workflow step, not external input.
     subprocess.run([bash, "-e", "-c", script], cwd=tmp_path, env=env, check=True)  # noqa: S603
 
-    assert github_env.read_text().strip() == written
+    written = github_env.read_text().strip()
+    if minor is None:
+        assert written == ""
+    else:
+        request = written.removeprefix("UV_PYTHON=")
+        assert request.startswith(f"=={minor}.*,"), written

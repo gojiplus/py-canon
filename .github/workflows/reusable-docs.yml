@@ -33,25 +33,39 @@ jobs:
         # requires-python; otherwise it downloads the newest release, which can be
         # newer than a dependency's wheels (torch had none for 3.15 when 3.15
         # shipped). The test matrix names its versions; this pins the jobs that
-        # do not, to the floor the package declares. A pin already set wins.
+        # do not to the lowest minor version requires-python allows, intersected
+        # with any dependency group's own requires-python. A UV_PYTHON the caller
+        # set, or the repo's .python-version, is left alone.
         run: |
-          floor=$(python3 - <<'PY'
-          import re
+          if [ -n "${UV_PYTHON:-}" ] || [ -f .python-version ]; then
+            echo "keeping the interpreter already chosen"
+            exit 0
+          fi
+          request=$(uv run --no-project --with packaging python - <<'PY'
           import tomllib
+
+          from packaging.specifiers import SpecifierSet
 
           try:
               with open("pyproject.toml", "rb") as handle:
-                  spec = tomllib.load(handle)["project"]["requires-python"]
-          except (FileNotFoundError, KeyError):
-              spec = ""
-          match = re.search(r"(?:>=|~=|==)\s*(3\.\d+)", spec)
-          print(match.group(1) if match else "")
+                  data = tomllib.load(handle)
+          except FileNotFoundError:
+              data = {}
+          specs = [data.get("project", {}).get("requires-python", "")]
+          groups = data.get("tool", {}).get("uv", {}).get("dependency-groups", {})
+          specs += [g.get("requires-python", "") for g in groups.values()]
+          spec = SpecifierSet(",".join(s for s in specs if s))
+          if str(spec):
+              for minor in range(8, 40):
+                  if any(spec.contains(f"3.{minor}.{patch}") for patch in range(100)):
+                      print(f"==3.{minor}.*,{spec}")
+                      break
           PY
           )
-          if [ -n "$floor" ] && [ -z "${UV_PYTHON:-}" ]; then
-            echo "UV_PYTHON=$floor" >> "$GITHUB_ENV"
+          if [ -n "$request" ]; then
+            echo "UV_PYTHON=$request" >> "$GITHUB_ENV"
           fi
-          echo "requires-python floor: ${floor:-none}"
+          echo "interpreter request: ${request:-none}"
       - name: Sync docs environment
         run: |
           if [ -f uv.lock ]; then uv sync --frozen --group docs; else uv sync --group docs; fi
