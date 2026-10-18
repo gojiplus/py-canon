@@ -208,6 +208,27 @@ def _run_commands(node: object) -> list[str]:
     return []
 
 
+def _preen_invocations(command: str) -> list[str]:
+    """Each launcher-to-``preen check``/``fix`` call in a shell command.
+
+    Line continuations are joined and comments dropped first, so neither a
+    split command nor a pin mentioned only in a comment can satisfy the check.
+
+    Returns:
+        list[str]: One string per call, from its launcher through ``preen``.
+    """
+    joined = re.sub(r"\\\n\s*", " ", command)
+    lines = [re.sub(r"(^|\s)#.*$", "", line) for line in joined.splitlines()]
+    return [
+        match.group(0)
+        for line in lines
+        for match in re.finditer(
+            r"\b(?:uvx|uv\s+run|pipx\s+run)\b[^;&|]*?\bpreen\s+(?:check|fix)\b",
+            line,
+        )
+    ]
+
+
 def test_preen_version_is_pinned() -> None:
     """A Preen release must not change every caller's CI without review."""
     workflow = WORKFLOW.read_text()
@@ -221,15 +242,15 @@ def test_preen_version_is_pinned() -> None:
     workflows = sorted(WORKFLOW.parent.glob("*.yml")) + sorted(
         WORKFLOW.parent.glob("*.yaml")
     )
-    calls = [
-        (path.name, command)
+    invocations = [
+        (path.name, call)
         for path in workflows
         for command in _run_commands(yaml.safe_load(path.read_text()))
-        if re.search(r"\bpreen\s+(check|fix)\b", command)
+        for call in _preen_invocations(command)
     ]
-    assert calls, "no workflow runs Preen"
-    for name, command in calls:
-        assert "preen==0.7.0" in command, f"{name}: {command.strip()}"
+    assert invocations, "no workflow runs Preen"
+    for name, call in invocations:
+        assert re.search(r"--from preen==0\.7\.0\s", call), f"{name}: {call}"
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow
 
 
