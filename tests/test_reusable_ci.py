@@ -1,8 +1,11 @@
 """Regression tests for the shared CI workflow."""
 
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+import yaml
 
 WORKFLOW = Path(__file__).parents[1] / ".github/workflows/reusable-ci.yml"
 RELEASE_WORKFLOW = Path(__file__).parents[1] / ".github/workflows/reusable-release.yml"
@@ -191,18 +194,42 @@ def test_pydoclint_derives_the_package_from_module_name() -> None:
     assert "pydoclint found no package to check" in workflow
 
 
+def _run_commands(node: object) -> list[str]:
+    """Collect every ``run:`` command in a parsed workflow, at any depth.
+
+    Returns:
+        list[str]: The commands, each as one string.
+    """
+    if isinstance(node, dict):
+        found = [node["run"]] if isinstance(node.get("run"), str) else []
+        return found + [c for value in node.values() for c in _run_commands(value)]
+    if isinstance(node, list):
+        return [c for item in node for c in _run_commands(item)]
+    return []
+
+
 def test_preen_version_is_pinned() -> None:
     """A Preen release must not change every caller's CI without review."""
     workflow = WORKFLOW.read_text()
     pinned = "uvx --from preen==0.7.0 preen check --strict --skip tests"
     assert pinned in workflow
     assert "run: uvx preen check" not in workflow
-    # The template smoke job validates generated projects; it must use the
-    # same Preen the fleet runs, or the template can pass rules CI rejects.
-    for path in sorted(WORKFLOW.parent.glob("*.yml")):
-        for line in path.read_text().splitlines():
-            if "uvx" in line and "preen check" in line:
-                assert "--from preen==0.7.0 " in line, f"{path.name}: {line.strip()}"
+    # Every workflow, the template smoke job included, must run the same Preen
+    # the fleet runs, or a generated project can pass rules CI rejects. Read
+    # each run command whole, so a line continuation or another launcher
+    # (`uv run --with preen`) cannot hide an unpinned call.
+    workflows = sorted(WORKFLOW.parent.glob("*.yml")) + sorted(
+        WORKFLOW.parent.glob("*.yaml")
+    )
+    calls = [
+        (path.name, command)
+        for path in workflows
+        for command in _run_commands(yaml.safe_load(path.read_text()))
+        if re.search(r"\bpreen\s+(check|fix)\b", command)
+    ]
+    assert calls, "no workflow runs Preen"
+    for name, command in calls:
+        assert "preen==0.7.0" in command, f"{name}: {command.strip()}"
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow
 
 
