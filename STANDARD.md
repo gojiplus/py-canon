@@ -69,8 +69,9 @@ require successful candidate CI before exposing a revision to consumers.
     between modules fails; tests, docs, examples and scripts outside the
     package are not scanned. Share the code; mark a copy that must stay with
     `# pylint: disable=duplicate-code` and a comment saying why.
-  - **US English.** codespell with `clear,rare,en-GB_to_en-US`, over prose and
-    config files outside data and fixture directories. Each repo also sets
+  - **US English.** codespell with `clear,rare,en-GB_to_en-US`, over file names
+    and the text of Markdown, reST, Python (identifiers included), TOML, YAML
+    and shell files outside data and fixture directories. Each repo also sets
     `builtin = "clear,rare,en-GB_to_en-US"` under `[tool.codespell]`, and marks
     names it does not own (an upstream API's `cancelled`, a quoted title) with
     `# codespell:ignore` or `ignore-regex` rather than changing them.

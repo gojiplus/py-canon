@@ -197,6 +197,12 @@ def test_preen_version_is_pinned() -> None:
     pinned = "uvx --from preen==0.7.0 preen check --strict --skip tests"
     assert pinned in workflow
     assert "run: uvx preen check" not in workflow
+    # The template smoke job validates generated projects; it must use the
+    # same Preen the fleet runs, or the template can pass rules CI rejects.
+    for path in sorted(WORKFLOW.parent.glob("*.yml")):
+        for line in path.read_text().splitlines():
+            if "uvx" in line and "preen check" in line:
+                assert "--from preen==0.7.0 " in line, f"{path.name}: {line.strip()}"
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow
 
 

@@ -29,7 +29,8 @@ not a release of its own.
 - Added opt-in coverage before pytest plugin loading, with regression tests for
   import-time measurement, untouched modules, and test/coverage failures.
 
-- Pinned Preen 0.6.2 in reusable CI so a newly published conformance rule
+- Pinned Preen in reusable CI (0.6.2 at first; 0.7.0 under Changed) so a
+  newly published conformance rule
   cannot change every caller's required checks without a reviewed py-canon
   update, and authenticated its GitHub link checks to avoid anonymous
   throttling failures.
