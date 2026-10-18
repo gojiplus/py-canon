@@ -29,7 +29,14 @@ dev = [
     "pyright>=1.1.390",
     { include-group = "test" },
 ]
-test = ["pytest>=8", "sphinx>=8", "furo", "myst-parser", "sphinx-copybutton"]
+test = [
+    "pytest>=8",
+    "sphinx>=8",
+    "furo",
+    "myst-parser",
+    "sphinx-copybutton",
+    "pytest-cov>=7.1.0",
+]
 docs = ["sphinx>=8", "furo", "myst-parser", "sphinx-copybutton"]
 
 [tool.ruff]
