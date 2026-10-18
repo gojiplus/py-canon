@@ -53,7 +53,7 @@ require successful candidate CI before exposing a revision to consumers.
   CI installs with `--frozen`.
 - Build backend: **uv_build**. Use its standard `src/` layout and avoid backend
   configuration unless the package genuinely needs non-default file inclusion.
-- **ruff** is the only linter and formatter. Line length 88. Lint select:
+- **ruff** is the linter and formatter. Line length 88. Lint select:
   `E, W, F, I, B, C4, UP, N, D, S, SIM, T20, PT, RUF, PTH, RET, PIE, FURB,
   PERF, DTZ, LOG, G, TC, FLY, RSE, SLOT, FA, A, EXE, ICN, PGH, PLE, ARG,
   SLF` — about half of ruff's stable rules, skewed to the auto-fixable ones;
@@ -62,6 +62,18 @@ require successful candidate CI before exposing a revision to consumers.
   `W191, D206, D300` (ruff documents these as always incompatible with
   `ruff format`, which this standard also runs). No black, no isort, no
   flake8.
+- Two checks ruff cannot do run inside `preen check`, not as separate tools a
+  repo configures:
+  - **Duplicated code.** pylint's similarity checker (R0801, nothing else of
+    pylint) over the import package. A block of 12 or more lines copied
+    between modules fails; tests, docs, examples and scripts outside the
+    package are not scanned. Share the code; mark a copy that must stay with
+    `# pylint: disable=duplicate-code` and a comment saying why.
+  - **US English.** codespell with `clear,rare,en-GB_to_en-US`, over prose and
+    config files outside data and fixture directories. Each repo also sets
+    `builtin = "clear,rare,en-GB_to_en-US"` under `[tool.codespell]`, and marks
+    names it does not own (an upstream API's `cancelled`, a quoted title) with
+    `# codespell:ignore` or `ignore-regex` rather than changing them.
   Framework-specific sets (`PD`, `NPY`, `ASYNC`, `DJ`, …) are deliberately
   left to individual repos; `preen adopt` preserves a repo's own
   `extend-select` rather than overwriting it.
@@ -284,7 +296,7 @@ Workflow hygiene baked into the shims/reusables: top-level
 `preen check --strict` runs in CI (part of the lint job) and fails a repo that
 drifts from the standard: template drift, stale generated files, structure
 violations, invalid runtime assets, docstring gaps, dead links, CI-matrix
-mismatch.
+mismatch, duplicated code, British spellings.
 
 An entry in `FLEET` means py-canon monitors the repository. It does not mean
 the repository has adopted the standard. Adoption means the repository records

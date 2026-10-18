@@ -194,7 +194,7 @@ def test_pydoclint_derives_the_package_from_module_name() -> None:
 def test_preen_version_is_pinned() -> None:
     """A Preen release must not change every caller's CI without review."""
     workflow = WORKFLOW.read_text()
-    pinned = "uvx --from preen==0.6.2 preen check --strict --skip tests"
+    pinned = "uvx --from preen==0.7.0 preen check --strict --skip tests"
     assert pinned in workflow
     assert "run: uvx preen check" not in workflow
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow

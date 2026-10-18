@@ -11,6 +11,12 @@ not a release of its own.
 
 ### Changed
 
+- Reusable CI runs Preen 0.7.0, which adds two gates: `duplicate-code`
+  (pylint's similarity checker, failing on 12+ lines copied between package
+  modules) and US English in `codespell`. STANDARD.md describes both and no
+  longer calls ruff the only linter. Before the bump, all 47 FLEET repositories
+  were checked under 0.6.2 and 0.7.0: the only one that newly fails is
+  themains/piedomains, on duplicate code.
 - Docs carry content, not just configuration. The template's home page
   includes the README (after a `<!-- SPHINX-START -->` marker), the API page is
   an autosummary reference with one page per public object from `__all__`, and
