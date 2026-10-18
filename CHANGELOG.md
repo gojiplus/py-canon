@@ -11,6 +11,12 @@ not a release of its own.
 
 ### Changed
 
+- Reusable CI runs Preen 0.7.0, which adds two gates: `duplicate-code`
+  (pylint's similarity checker, failing on 12+ lines copied between package
+  modules) and US English in `codespell`. STANDARD.md describes both and no
+  longer calls ruff the only linter. Before the bump, all 47 FLEET repositories
+  were checked under 0.6.2 and 0.7.0: the only one that newly fails is
+  themains/piedomains, on duplicate code.
 - Docs carry content, not just configuration. The template's home page
   includes the README (after a `<!-- SPHINX-START -->` marker), the API page is
   an autosummary reference with one page per public object from `__all__`, and
@@ -23,7 +29,8 @@ not a release of its own.
 - Added opt-in coverage before pytest plugin loading, with regression tests for
   import-time measurement, untouched modules, and test/coverage failures.
 
-- Pinned Preen 0.6.2 in reusable CI so a newly published conformance rule
+- Pinned Preen in reusable CI (0.6.2 at first; 0.7.0 under Changed) so a
+  newly published conformance rule
   cannot change every caller's required checks without a reviewed py-canon
   update, and authenticated its GitHub link checks to avoid anonymous
   throttling failures.

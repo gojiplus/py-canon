@@ -130,7 +130,7 @@ jobs:
         # 15m15s while pytest was still going.
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: uvx --from preen==0.6.2 preen check --strict --skip tests
+        run: uvx --from preen==0.7.0 preen check --strict --skip tests
 
   test:
     runs-on: ${{ matrix.os }}

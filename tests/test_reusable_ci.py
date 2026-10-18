@@ -1,8 +1,11 @@
 """Regression tests for the shared CI workflow."""
 
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+import yaml
 
 WORKFLOW = Path(__file__).parents[1] / ".github/workflows/reusable-ci.yml"
 RELEASE_WORKFLOW = Path(__file__).parents[1] / ".github/workflows/reusable-release.yml"
@@ -191,12 +194,63 @@ def test_pydoclint_derives_the_package_from_module_name() -> None:
     assert "pydoclint found no package to check" in workflow
 
 
+def _run_commands(node: object) -> list[str]:
+    """Collect every ``run:`` command in a parsed workflow, at any depth.
+
+    Returns:
+        list[str]: The commands, each as one string.
+    """
+    if isinstance(node, dict):
+        found = [node["run"]] if isinstance(node.get("run"), str) else []
+        return found + [c for value in node.values() for c in _run_commands(value)]
+    if isinstance(node, list):
+        return [c for item in node for c in _run_commands(item)]
+    return []
+
+
+def _preen_invocations(command: str) -> list[str]:
+    """Each launcher-to-``preen check``/``fix`` call in a shell command.
+
+    Line continuations are joined and comments dropped first, so neither a
+    split command nor a pin mentioned only in a comment can satisfy the check.
+
+    Returns:
+        list[str]: One string per call, from its launcher through ``preen``.
+    """
+    joined = re.sub(r"\\\n\s*", " ", command)
+    lines = [re.sub(r"(^|\s)#.*$", "", line) for line in joined.splitlines()]
+    return [
+        match.group(0)
+        for line in lines
+        for match in re.finditer(
+            r"\b(?:uvx|uv\s+run|pipx\s+run)\b[^;&|]*?\bpreen\s+(?:check|fix)\b",
+            line,
+        )
+    ]
+
+
 def test_preen_version_is_pinned() -> None:
     """A Preen release must not change every caller's CI without review."""
     workflow = WORKFLOW.read_text()
-    pinned = "uvx --from preen==0.6.2 preen check --strict --skip tests"
+    pinned = "uvx --from preen==0.7.0 preen check --strict --skip tests"
     assert pinned in workflow
     assert "run: uvx preen check" not in workflow
+    # Every workflow, the template smoke job included, must run the same Preen
+    # the fleet runs, or a generated project can pass rules CI rejects. Read
+    # each run command whole, so a line continuation or another launcher
+    # (`uv run --with preen`) cannot hide an unpinned call.
+    workflows = sorted(WORKFLOW.parent.glob("*.yml")) + sorted(
+        WORKFLOW.parent.glob("*.yaml")
+    )
+    invocations = [
+        (path.name, call)
+        for path in workflows
+        for command in _run_commands(yaml.safe_load(path.read_text()))
+        for call in _preen_invocations(command)
+    ]
+    assert invocations, "no workflow runs Preen"
+    for name, call in invocations:
+        assert re.search(r"--from preen==0\.7\.0\s", call), f"{name}: {call}"
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow
 
 
