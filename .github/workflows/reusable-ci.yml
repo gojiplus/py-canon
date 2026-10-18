@@ -15,6 +15,10 @@ on:
         description: 'Fail tests below this coverage percent (0 disables)'
         type: number
         default: 0
+      coverage-before-pytest:
+        description: 'Start coverage before pytest imports installed plugins'
+        type: boolean
+        default: false
       test-timeout-minutes:
         description: 'Maximum runtime for each test-matrix job'
         type: number
@@ -162,9 +166,15 @@ jobs:
       - name: Run tests
         env:
           COVERAGE_FLOOR: ${{ inputs.coverage-floor }}
+          COVERAGE_BEFORE_PYTEST: ${{ inputs.coverage-before-pytest }}
         run: |
           if [ "$COVERAGE_FLOOR" != "0" ]; then
-            uv run pytest --cov --cov-report=term-missing --cov-fail-under="$COVERAGE_FLOOR"
+            if [ "$COVERAGE_BEFORE_PYTEST" = "true" ]; then
+              uv run coverage run -m pytest --no-cov
+              uv run coverage report --show-missing --fail-under="$COVERAGE_FLOOR"
+            else
+              uv run pytest --cov --cov-report=term-missing --cov-fail-under="$COVERAGE_FLOOR"
+            fi
           else
             uv run pytest
           fi

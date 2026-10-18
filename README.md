@@ -61,3 +61,10 @@ resolved workflow commit identify what an assessment tested.
 
 [Authority and conformance](STANDARD.md#authority-and-conformance) separates
 requirements from implementation and defines evidence for conformance claims.
+
+Projects that expose pytest plugins can set `coverage-before-pytest: true` in
+the reusable CI inputs. With a nonzero `coverage-floor`, this runs
+`coverage run -m pytest --no-cov` followed by `coverage report --fail-under`,
+so plugin imports are measured. Configure `[tool.coverage.run]` in the project's
+`pyproject.toml` with `source` pointing to the shipped package; enable `branch`
+to include branch coverage. Other consumers retain their existing test command.
