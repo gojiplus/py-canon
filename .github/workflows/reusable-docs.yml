@@ -34,10 +34,12 @@ jobs:
         # newer than a dependency's wheels (torch had none for 3.15 when 3.15
         # shipped). The test matrix names its versions; this pins the jobs that
         # do not to the lowest minor version requires-python allows, intersected
-        # with the requires-python of each group the job installs (FLOOR_GROUPS).
+        # with the requires-python of each group the job installs: FLOOR_GROUPS,
+        # plus the repo's default groups where a uv sync or uv run adds them.
         # A UV_PYTHON the caller set, or the repo's .python-version, is left alone.
         env:
-          FLOOR_GROUPS: "dev docs"
+          FLOOR_GROUPS: "docs"
+          FLOOR_DEFAULTS: "true"
         run: |
           if [ -n "${UV_PYTHON:-}" ] || [ -f .python-version ]; then
             echo "keeping the interpreter already chosen"
@@ -56,8 +58,14 @@ jobs:
           except FileNotFoundError:
               data = {}
           specs = [data.get("project", {}).get("requires-python", "")]
-          groups = data.get("tool", {}).get("uv", {}).get("dependency-groups", {})
-          for name in os.environ.get("FLOOR_GROUPS", "").split():
+          uv_table = data.get("tool", {}).get("uv", {})
+          groups = uv_table.get("dependency-groups", {})
+          names = set(os.environ.get("FLOOR_GROUPS", "").split())
+          # Jobs whose uv sync or bare uv run also installs the default groups.
+          if os.environ.get("FLOOR_DEFAULTS") == "true":
+              defaults = uv_table.get("default-groups", ["dev"])
+              names |= set(groups) if defaults == "all" else set(defaults)
+          for name in sorted(names):
               specs.append(groups.get(name, {}).get("requires-python", ""))
           spec = SpecifierSet(",".join(s for s in specs if s))
           if str(spec):

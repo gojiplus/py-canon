@@ -443,7 +443,9 @@ def test_jobs_without_a_matrix_python_pin_the_package_floor() -> None:
         names = [s.get("name") for s in steps]
         assert FLOOR_STEP in names, name
         first_uv = next(
-            i for i, s in enumerate(steps) if UV_COMMAND.search(s.get("run", ""))
+            i
+            for i, s in enumerate(steps)
+            if s.get("name") != FLOOR_STEP and UV_COMMAND.search(s.get("run", ""))
         )
         assert names.index(FLOOR_STEP) < first_uv, name
     scripts = {
@@ -529,3 +531,54 @@ def test_the_floor_step_requests_the_lowest_allowed_python(
     else:
         request = written.removeprefix("UV_PYTHON=")
         assert request.startswith(f"=={minor}.*,"), written
+
+
+def _run_floor_step(job: str, pyproject: str, tmp_path: Path) -> str:
+    """Run one job's floor step against a pyproject.toml.
+
+    Returns:
+        str: What the step wrote to GITHUB_ENV.
+    """
+    step = next(s for s in _floor_jobs()[job] if s.get("name") == FLOOR_STEP)
+    (tmp_path / "pyproject.toml").write_text(pyproject)
+    github_env = tmp_path / "github_env"
+    github_env.touch()
+    env = {"PATH": os.environ["PATH"], "GITHUB_ENV": str(github_env)}
+    env |= step.get("env", {})
+    if "HOME" in os.environ:
+        env["HOME"] = os.environ["HOME"]
+    bash = shutil.which("bash")
+    assert bash is not None
+    # The script is this repository's own workflow step, not external input.
+    subprocess.run(  # noqa: S603
+        [bash, "-e", "-c", step["run"]], cwd=tmp_path, env=env, check=True
+    )
+    return github_env.read_text().strip()
+
+
+GROUPS = '[tool.uv.dependency-groups]\n{group} = {{requires-python = "{floor}"}}\n'
+
+
+@pytest.mark.parametrize(
+    ("job", "uv_table", "group", "group_floor", "minor"),
+    [
+        # lint's later bare `uv run` installs the configured default groups
+        ("reusable-ci/lint", 'default-groups = ["ops"]\n', "ops", ">=3.13", "3.13"),
+        # docs' `uv sync --group docs` keeps the defaults, which are dev unless set
+        ("reusable-docs/build", "", "dev", ">=3.13", "3.13"),
+        ("reusable-docs/build", "default-groups = []\n", "dev", ">=3.14", "3.12"),
+        # the wheel job installs only the test group
+        ("reusable-ci/wheel", "", "dev", ">=3.14", "3.12"),
+    ],
+)
+def test_the_floor_follows_the_groups_each_job_installs(
+    job, uv_table, group, group_floor, minor, tmp_path
+) -> None:
+    pyproject = '[project]\nname = "demo"\nrequires-python = ">=3.12"\n'
+    pyproject += (
+        "[tool.uv]\n" + uv_table + GROUPS.format(group=group, floor=group_floor)
+    )
+
+    written = _run_floor_step(job, pyproject, tmp_path)
+
+    assert written.removeprefix("UV_PYTHON=").startswith(f"=={minor}.*,"), written
