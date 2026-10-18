@@ -470,6 +470,14 @@ def test_jobs_without_a_matrix_python_pin_the_package_floor() -> None:
             None,
             "3.13",
         ),
+        (
+            'requires-python = ">=3.12"\n'
+            '[tool.uv.dependency-groups]\nops = {requires-python = ">=3.14"}',
+            None,
+            None,
+            "3.12",
+        ),  # lint does not install ops, so ops does not raise its floor
+        ('requires-python = ">=4"', None, None, None),  # unsatisfiable: warn, no pin
         ("", None, None, None),  # no requires-python: uv chooses, as before
         ('requires-python = ">=3.13"', None, "3.14", None),  # a caller's pin wins
         ('requires-python = ">=3.12"', ".python-version", None, None),  # so does this
@@ -478,11 +486,10 @@ def test_jobs_without_a_matrix_python_pin_the_package_floor() -> None:
 def test_the_floor_step_requests_the_lowest_allowed_python(
     pyproject, extra_file, preset, minor, tmp_path
 ) -> None:
-    script = next(
-        s["run"]
-        for s in _floor_jobs()["reusable-ci/lint"]
-        if s.get("name") == FLOOR_STEP
+    step = next(
+        s for s in _floor_jobs()["reusable-ci/lint"] if s.get("name") == FLOOR_STEP
     )
+    script = step["run"]
     body = pyproject.split("\n[tool", 1)
     toml = '[project]\nname = "demo"\n' + body[0] + "\n"
     if len(body) > 1:
@@ -492,7 +499,11 @@ def test_the_floor_step_requests_the_lowest_allowed_python(
         (tmp_path / extra_file).write_text("3.13\n")
     github_env = tmp_path / "github_env"
     github_env.touch()
-    env = {"PATH": os.environ["PATH"], "GITHUB_ENV": str(github_env)}
+    env = {
+        "PATH": os.environ["PATH"],
+        "GITHUB_ENV": str(github_env),
+        **step.get("env", {}),
+    }
     if "HOME" in os.environ:
         env["HOME"] = os.environ["HOME"]
     if preset:
@@ -501,9 +512,18 @@ def test_the_floor_step_requests_the_lowest_allowed_python(
     assert bash is not None
 
     # The script is this repository's own workflow step, not external input.
-    subprocess.run([bash, "-e", "-c", script], cwd=tmp_path, env=env, check=True)  # noqa: S603
+    ran = subprocess.run(  # noqa: S603
+        [bash, "-e", "-c", script],
+        cwd=tmp_path,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
     written = github_env.read_text().strip()
+    if pyproject.endswith('">=4"'):
+        assert "::warning::no Python 3.x satisfies" in ran.stdout
     if minor is None:
         assert written == ""
     else:

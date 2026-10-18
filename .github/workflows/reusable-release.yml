@@ -74,14 +74,18 @@ jobs:
         # newer than a dependency's wheels (torch had none for 3.15 when 3.15
         # shipped). The test matrix names its versions; this pins the jobs that
         # do not to the lowest minor version requires-python allows, intersected
-        # with any dependency group's own requires-python. A UV_PYTHON the caller
-        # set, or the repo's .python-version, is left alone.
+        # with the requires-python of each group the job installs (FLOOR_GROUPS).
+        # A UV_PYTHON the caller set, or the repo's .python-version, is left alone.
+        env:
+          FLOOR_GROUPS: "dev test"
         run: |
           if [ -n "${UV_PYTHON:-}" ] || [ -f .python-version ]; then
             echo "keeping the interpreter already chosen"
             exit 0
           fi
-          request=$(uv run --no-project --with packaging python - <<'PY'
+          request=$(uv run --no-project --python '>=3.11' --with packaging==26.3 \
+            python - <<'PY'
+          import os
           import tomllib
 
           from packaging.specifiers import SpecifierSet
@@ -93,15 +97,22 @@ jobs:
               data = {}
           specs = [data.get("project", {}).get("requires-python", "")]
           groups = data.get("tool", {}).get("uv", {}).get("dependency-groups", {})
-          specs += [g.get("requires-python", "") for g in groups.values()]
+          for name in os.environ.get("FLOOR_GROUPS", "").split():
+              specs.append(groups.get(name, {}).get("requires-python", ""))
           spec = SpecifierSet(",".join(s for s in specs if s))
           if str(spec):
-              for minor in range(8, 40):
-                  if any(spec.contains(f"3.{minor}.{patch}") for patch in range(100)):
+              for minor in range(8, 100):
+                  if any(spec.contains(f"3.{minor}.{patch}") for patch in range(1000)):
                       print(f"==3.{minor}.*,{spec}")
                       break
+              else:
+                  print(f"!{spec}")  # nothing satisfies it; the shell warns
           PY
           )
+          if [ "${request#!}" != "$request" ]; then
+            echo "::warning::no Python 3.x satisfies ${request#!}"
+            request=""
+          fi
           if [ -n "$request" ]; then
             echo "UV_PYTHON=$request" >> "$GITHUB_ENV"
           fi
@@ -146,14 +157,18 @@ jobs:
         # newer than a dependency's wheels (torch had none for 3.15 when 3.15
         # shipped). The test matrix names its versions; this pins the jobs that
         # do not to the lowest minor version requires-python allows, intersected
-        # with any dependency group's own requires-python. A UV_PYTHON the caller
-        # set, or the repo's .python-version, is left alone.
+        # with the requires-python of each group the job installs (FLOOR_GROUPS).
+        # A UV_PYTHON the caller set, or the repo's .python-version, is left alone.
+        env:
+          FLOOR_GROUPS: ""
         run: |
           if [ -n "${UV_PYTHON:-}" ] || [ -f .python-version ]; then
             echo "keeping the interpreter already chosen"
             exit 0
           fi
-          request=$(uv run --no-project --with packaging python - <<'PY'
+          request=$(uv run --no-project --python '>=3.11' --with packaging==26.3 \
+            python - <<'PY'
+          import os
           import tomllib
 
           from packaging.specifiers import SpecifierSet
@@ -165,15 +180,22 @@ jobs:
               data = {}
           specs = [data.get("project", {}).get("requires-python", "")]
           groups = data.get("tool", {}).get("uv", {}).get("dependency-groups", {})
-          specs += [g.get("requires-python", "") for g in groups.values()]
+          for name in os.environ.get("FLOOR_GROUPS", "").split():
+              specs.append(groups.get(name, {}).get("requires-python", ""))
           spec = SpecifierSet(",".join(s for s in specs if s))
           if str(spec):
-              for minor in range(8, 40):
-                  if any(spec.contains(f"3.{minor}.{patch}") for patch in range(100)):
+              for minor in range(8, 100):
+                  if any(spec.contains(f"3.{minor}.{patch}") for patch in range(1000)):
                       print(f"==3.{minor}.*,{spec}")
                       break
+              else:
+                  print(f"!{spec}")  # nothing satisfies it; the shell warns
           PY
           )
+          if [ "${request#!}" != "$request" ]; then
+            echo "::warning::no Python 3.x satisfies ${request#!}"
+            request=""
+          fi
           if [ -n "$request" ]; then
             echo "UV_PYTHON=$request" >> "$GITHUB_ENV"
           fi
