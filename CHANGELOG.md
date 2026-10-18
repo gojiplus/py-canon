@@ -11,6 +11,12 @@ not a release of its own.
 
 ### Changed
 
+- Jobs outside the test matrix (lint, wheel, docs build, release test and
+  build) pin `UV_PYTHON` to the package's `requires-python` floor. They used
+  the runner's Python (3.12) when it qualified and otherwise whatever uv
+  downloaded, the newest release: in-rolls/indicate (`>=3.13`) got Python 3.15,
+  for which torch has no wheels, and every one of those jobs failed. Repos with
+  a 3.12 floor run on 3.12 as before. A `UV_PYTHON` the caller sets still wins.
 - Reusable CI runs Preen 0.7.0, which adds two gates: `duplicate-code`
   (pylint's similarity checker, failing on 12+ lines copied between package
   modules) and US English in `codespell`. STANDARD.md describes both and no

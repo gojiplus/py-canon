@@ -1,10 +1,13 @@
 """Regression tests for the shared CI workflow."""
 
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 WORKFLOW = Path(__file__).parents[1] / ".github/workflows/reusable-ci.yml"
@@ -403,3 +406,85 @@ def test_lock_regression_is_gated_and_overridable() -> None:
     condition = workflow["jobs"]["lock-regression"]["if"]
     assert "github.event_name == 'pull_request'" in condition
     assert "'lock-downgrade-ok'" in condition
+
+
+FLOOR_STEP = "Use the package's minimum Python"
+WORKFLOWS = Path(__file__).parents[1] / ".github/workflows"
+UV_COMMAND = re.compile(r"\buv (sync|venv|build|pip|run)\b(?! --no-project)")
+
+
+def _floor_jobs() -> dict[str, list[dict]]:
+    """Jobs that run uv against the project without naming a Python.
+
+    Returns:
+        dict[str, list[dict]]: ``workflow/job`` to that job's steps.
+    """
+    jobs = {}
+    for path in sorted(WORKFLOWS.glob("reusable-*.yml")):
+        for name, job in yaml.safe_load(path.read_text())["jobs"].items():
+            steps = job.get("steps", [])
+            named = "python-version" in str(job.get("strategy", {}))
+            if not named and any(UV_COMMAND.search(s.get("run", "")) for s in steps):
+                jobs[f"{path.stem}/{name}"] = steps
+    return jobs
+
+
+def test_jobs_without_a_matrix_python_pin_the_package_floor() -> None:
+    """uv otherwise downloads the newest Python when the runner's is too old."""
+    jobs = _floor_jobs()
+    assert set(jobs) == {
+        "reusable-ci/lint",
+        "reusable-ci/wheel",
+        "reusable-docs/build",
+        "reusable-release/test",
+        "reusable-release/build",
+    }
+    for name, steps in jobs.items():
+        names = [s.get("name") for s in steps]
+        assert FLOOR_STEP in names, name
+        first_uv = next(
+            i for i, s in enumerate(steps) if UV_COMMAND.search(s.get("run", ""))
+        )
+        assert names.index(FLOOR_STEP) < first_uv, name
+    scripts = {
+        next(s["run"] for s in steps if s.get("name") == FLOOR_STEP)
+        for steps in jobs.values()
+    }
+    assert len(scripts) == 1, "the floor step has drifted between jobs"
+
+
+@pytest.mark.parametrize(
+    ("requires_python", "preset", "written"),
+    [
+        (">=3.13", None, "UV_PYTHON=3.13"),
+        (">=3.12,<3.15", None, "UV_PYTHON=3.12"),
+        ("~=3.13", None, "UV_PYTHON=3.13"),
+        ("==3.14.*", None, "UV_PYTHON=3.14"),
+        (None, None, ""),
+        (">=3.13", "3.14", ""),  # a caller's pin wins
+    ],
+)
+def test_the_floor_step_sets_uv_python(
+    requires_python, preset, written, tmp_path
+) -> None:
+    script = next(
+        s["run"]
+        for s in _floor_jobs()["reusable-ci/lint"]
+        if s.get("name") == FLOOR_STEP
+    )
+    project = 'name = "demo"\n' + (
+        f'requires-python = "{requires_python}"\n' if requires_python else ""
+    )
+    (tmp_path / "pyproject.toml").write_text("[project]\n" + project)
+    github_env = tmp_path / "github_env"
+    github_env.touch()
+    env = {"PATH": os.environ["PATH"], "GITHUB_ENV": str(github_env)}
+    if preset:
+        env["UV_PYTHON"] = preset
+
+    bash = shutil.which("bash")
+    assert bash is not None
+    # The script is this repository's own workflow step, not external input.
+    subprocess.run([bash, "-e", "-c", script], cwd=tmp_path, env=env, check=True)  # noqa: S603
+
+    assert github_env.read_text().strip() == written

@@ -218,6 +218,12 @@ only installation and installed-package tests are skipped. This is an explicit
 exception for data corpora and similar projects, not a way to bypass a failing
 package build.
 
+Jobs outside the test matrix (lint, wheel validation, docs, the release build
+and its tests) run on the package's declared floor: the lowest version in
+`requires-python`, set as `UV_PYTHON`. Left to choose, uv uses the runner's own
+Python only when it satisfies `requires-python` and otherwise downloads the
+newest release, which can predate a dependency's wheels.
+
 Workflow hygiene baked into the shims/reusables: top-level
 `permissions: contents: read`, `concurrency` cancel-in-progress,
 `timeout-minutes` on every job.

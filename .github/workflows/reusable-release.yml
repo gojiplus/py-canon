@@ -68,6 +68,30 @@ jobs:
           PINNED: ${{ inputs.test-python-version }}
         run: echo "UV_PYTHON=$PINNED" >> "$GITHUB_ENV"
       # Same sync as reusable-ci's test job, so a release runs what CI runs.
+      - name: Use the package's minimum Python
+        # uv uses the runner's own Python (3.12) only when it satisfies
+        # requires-python; otherwise it downloads the newest release, which can be
+        # newer than a dependency's wheels (torch had none for 3.15 when 3.15
+        # shipped). The test matrix names its versions; this pins the jobs that
+        # do not, to the floor the package declares. A pin already set wins.
+        run: |
+          floor=$(python3 - <<'PY'
+          import re
+          import tomllib
+
+          try:
+              with open("pyproject.toml", "rb") as handle:
+                  spec = tomllib.load(handle)["project"]["requires-python"]
+          except (FileNotFoundError, KeyError):
+              spec = ""
+          match = re.search(r"(?:>=|~=|==)\s*(3\.\d+)", spec)
+          print(match.group(1) if match else "")
+          PY
+          )
+          if [ -n "$floor" ] && [ -z "${UV_PYTHON:-}" ]; then
+            echo "UV_PYTHON=$floor" >> "$GITHUB_ENV"
+          fi
+          echo "requires-python floor: ${floor:-none}"
       - name: Sync environment
         run: |
           test_group=()
@@ -102,6 +126,30 @@ jobs:
         with:
           fetch-depth: 0  # remove after the existing dynamic-version repos migrate
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Use the package's minimum Python
+        # uv uses the runner's own Python (3.12) only when it satisfies
+        # requires-python; otherwise it downloads the newest release, which can be
+        # newer than a dependency's wheels (torch had none for 3.15 when 3.15
+        # shipped). The test matrix names its versions; this pins the jobs that
+        # do not, to the floor the package declares. A pin already set wins.
+        run: |
+          floor=$(python3 - <<'PY'
+          import re
+          import tomllib
+
+          try:
+              with open("pyproject.toml", "rb") as handle:
+                  spec = tomllib.load(handle)["project"]["requires-python"]
+          except (FileNotFoundError, KeyError):
+              spec = ""
+          match = re.search(r"(?:>=|~=|==)\s*(3\.\d+)", spec)
+          print(match.group(1) if match else "")
+          PY
+          )
+          if [ -n "$floor" ] && [ -z "${UV_PYTHON:-}" ]; then
+            echo "UV_PYTHON=$floor" >> "$GITHUB_ENV"
+          fi
+          echo "requires-python floor: ${floor:-none}"
       - name: Build distributions
         run: uv build
       - name: Verify release version
