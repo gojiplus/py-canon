@@ -28,6 +28,65 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Use the package's minimum Python
+        # uv uses the runner's own Python (3.12) only when it satisfies
+        # requires-python; otherwise it downloads the newest release, which can be
+        # newer than a dependency's wheels (torch had none for 3.15 when 3.15
+        # shipped). The test matrix names its versions; this pins the jobs that
+        # do not to the lowest minor version requires-python allows, intersected
+        # with the requires-python of each group the job installs: FLOOR_GROUPS,
+        # plus the repo's default groups where a uv sync or uv run adds them.
+        # A UV_PYTHON the caller set, or the repo's .python-version, is left alone.
+        env:
+          FLOOR_GROUPS: "docs"
+          FLOOR_DEFAULTS: "true"
+        run: |
+          if [ -n "${UV_PYTHON:-}" ] || [ -f .python-version ]; then
+            echo "keeping the interpreter already chosen"
+            exit 0
+          fi
+          request=$(uv run --no-project --python '>=3.11' --with packaging==26.3 \
+            python - <<'PY'
+          import os
+          import tomllib
+
+          from packaging.specifiers import SpecifierSet
+          from packaging.utils import canonicalize_name as canon
+
+          try:
+              with open("pyproject.toml", "rb") as handle:
+                  data = tomllib.load(handle)
+          except FileNotFoundError:
+              data = {}
+          specs = [data.get("project", {}).get("requires-python", "")]
+          uv_table = data.get("tool", {}).get("uv", {})
+          # Group names compare normalized, as the dependency-groups spec says.
+          groups = {canon(k): v for k, v in uv_table.get("dependency-groups", {}).items()}
+          names = {canon(g) for g in os.environ.get("FLOOR_GROUPS", "").split()}
+          # Jobs whose uv sync or bare uv run also installs the default groups.
+          if os.environ.get("FLOOR_DEFAULTS") == "true":
+              defaults = uv_table.get("default-groups", ["dev"])
+              names |= set(groups) if defaults == "all" else {canon(g) for g in defaults}
+          for name in sorted(names):
+              specs.append(groups.get(name, {}).get("requires-python", ""))
+          spec = SpecifierSet(",".join(s for s in specs if s))
+          if str(spec):
+              for minor in range(8, 100):
+                  if any(spec.contains(f"3.{minor}.{patch}") for patch in range(1000)):
+                      print(f"==3.{minor}.*,{spec}")
+                      break
+              else:
+                  print(f"!{spec}")  # nothing satisfies it; the shell warns
+          PY
+          )
+          if [ "${request#!}" != "$request" ]; then
+            echo "::warning::no Python 3.x satisfies ${request#!}"
+            request=""
+          fi
+          if [ -n "$request" ]; then
+            echo "UV_PYTHON=$request" >> "$GITHUB_ENV"
+          fi
+          echo "interpreter request: ${request:-none}"
       - name: Sync docs environment
         run: |
           if [ -f uv.lock ]; then uv sync --frozen --group docs; else uv sync --group docs; fi

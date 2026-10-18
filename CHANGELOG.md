@@ -11,6 +11,13 @@ not a release of its own.
 
 ### Changed
 
+- Jobs outside the test matrix (lint, wheel, docs build, release test and
+  build) request the lowest minor version `requires-python` allows, intersected
+  with dependency groups' own `requires-python` (for example
+  `==3.13.*,>=3.13`). They used the runner's Python (3.12) when it qualified and
+  otherwise the newest release uv could download: in-rolls/indicate (`>=3.13`)
+  got Python 3.15, for which torch has no wheels, and every one of those jobs
+  failed. A repo's `.python-version` or a caller's `UV_PYTHON` takes precedence.
 - Reusable CI runs Preen 0.7.0, which adds two gates: `duplicate-code`
   (pylint's similarity checker, failing on 12+ lines copied between package
   modules) and US English in `codespell`. STANDARD.md describes both and no

@@ -1,10 +1,13 @@
 """Regression tests for the shared CI workflow."""
 
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 WORKFLOW = Path(__file__).parents[1] / ".github/workflows/reusable-ci.yml"
@@ -403,3 +406,181 @@ def test_lock_regression_is_gated_and_overridable() -> None:
     condition = workflow["jobs"]["lock-regression"]["if"]
     assert "github.event_name == 'pull_request'" in condition
     assert "'lock-downgrade-ok'" in condition
+
+
+FLOOR_STEP = "Use the package's minimum Python"
+WORKFLOWS = Path(__file__).parents[1] / ".github/workflows"
+UV_COMMAND = re.compile(r"\buv (sync|venv|build|pip|run)\b(?! --no-project)")
+
+
+def _floor_jobs() -> dict[str, list[dict]]:
+    """Jobs that run uv against the project without naming a Python.
+
+    Returns:
+        dict[str, list[dict]]: ``workflow/job`` to that job's steps.
+    """
+    jobs = {}
+    for path in sorted(WORKFLOWS.glob("reusable-*.yml")):
+        for name, job in yaml.safe_load(path.read_text())["jobs"].items():
+            steps = job.get("steps", [])
+            named = "python-version" in str(job.get("strategy", {}))
+            if not named and any(UV_COMMAND.search(s.get("run", "")) for s in steps):
+                jobs[f"{path.stem}/{name}"] = steps
+    return jobs
+
+
+def test_jobs_without_a_matrix_python_pin_the_package_floor() -> None:
+    """uv otherwise downloads the newest Python when the runner's is too old."""
+    jobs = _floor_jobs()
+    assert set(jobs) == {
+        "reusable-ci/lint",
+        "reusable-ci/wheel",
+        "reusable-docs/build",
+        "reusable-release/test",
+        "reusable-release/build",
+    }
+    for name, steps in jobs.items():
+        names = [s.get("name") for s in steps]
+        assert FLOOR_STEP in names, name
+        first_uv = next(
+            i
+            for i, s in enumerate(steps)
+            if s.get("name") != FLOOR_STEP and UV_COMMAND.search(s.get("run", ""))
+        )
+        assert names.index(FLOOR_STEP) < first_uv, name
+    scripts = {
+        next(s["run"] for s in steps if s.get("name") == FLOOR_STEP)
+        for steps in jobs.values()
+    }
+    assert len(scripts) == 1, "the floor step has drifted between jobs"
+
+
+@pytest.mark.parametrize(
+    ("pyproject", "extra_file", "preset", "minor"),
+    [
+        ('requires-python = ">=3.13"', None, None, "3.13"),
+        ('requires-python = ">=3.12,<3.15"', None, None, "3.12"),
+        ('requires-python = "~=3.13"', None, None, "3.13"),
+        ('requires-python = "==3.14.*"', None, None, "3.14"),
+        ('requires-python = ">=3.12,!=3.12.*"', None, None, "3.13"),
+        ('requires-python = ">=3.12,>=3.13"', None, None, "3.13"),
+        ('requires-python = ">=3.12.12"', None, None, "3.12"),
+        (
+            'requires-python = ">=3.12"\n'
+            '[tool.uv.dependency-groups]\ndev = {requires-python = ">=3.13"}',
+            None,
+            None,
+            "3.13",
+        ),
+        (
+            'requires-python = ">=3.12"\n'
+            '[tool.uv.dependency-groups]\nops = {requires-python = ">=3.14"}',
+            None,
+            None,
+            "3.12",
+        ),  # lint does not install ops, so ops does not raise its floor
+        ('requires-python = ">=4"', None, None, None),  # unsatisfiable: warn, no pin
+        ("", None, None, None),  # no requires-python: uv chooses, as before
+        ('requires-python = ">=3.13"', None, "3.14", None),  # a caller's pin wins
+        ('requires-python = ">=3.12"', ".python-version", None, None),  # so does this
+    ],
+)
+def test_the_floor_step_requests_the_lowest_allowed_python(
+    pyproject, extra_file, preset, minor, tmp_path
+) -> None:
+    step = next(
+        s for s in _floor_jobs()["reusable-ci/lint"] if s.get("name") == FLOOR_STEP
+    )
+    script = step["run"]
+    body = pyproject.split("\n[tool", 1)
+    toml = '[project]\nname = "demo"\n' + body[0] + "\n"
+    if len(body) > 1:
+        toml += "[tool" + body[1] + "\n"
+    (tmp_path / "pyproject.toml").write_text(toml)
+    if extra_file:
+        (tmp_path / extra_file).write_text("3.13\n")
+    github_env = tmp_path / "github_env"
+    github_env.touch()
+    env = {
+        "PATH": os.environ["PATH"],
+        "GITHUB_ENV": str(github_env),
+        **step.get("env", {}),
+    }
+    if "HOME" in os.environ:
+        env["HOME"] = os.environ["HOME"]
+    if preset:
+        env["UV_PYTHON"] = preset
+    bash = shutil.which("bash")
+    assert bash is not None
+
+    # The script is this repository's own workflow step, not external input.
+    ran = subprocess.run(  # noqa: S603
+        [bash, "-e", "-c", script],
+        cwd=tmp_path,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    written = github_env.read_text().strip()
+    if pyproject.endswith('">=4"'):
+        assert "::warning::no Python 3.x satisfies" in ran.stdout
+    if minor is None:
+        assert written == ""
+    else:
+        request = written.removeprefix("UV_PYTHON=")
+        assert request.startswith(f"=={minor}.*,"), written
+
+
+def _run_floor_step(job: str, pyproject: str, tmp_path: Path) -> str:
+    """Run one job's floor step against a pyproject.toml.
+
+    Returns:
+        str: What the step wrote to GITHUB_ENV.
+    """
+    step = next(s for s in _floor_jobs()[job] if s.get("name") == FLOOR_STEP)
+    (tmp_path / "pyproject.toml").write_text(pyproject)
+    github_env = tmp_path / "github_env"
+    github_env.touch()
+    env = {"PATH": os.environ["PATH"], "GITHUB_ENV": str(github_env)}
+    env |= step.get("env", {})
+    if "HOME" in os.environ:
+        env["HOME"] = os.environ["HOME"]
+    bash = shutil.which("bash")
+    assert bash is not None
+    # The script is this repository's own workflow step, not external input.
+    subprocess.run(  # noqa: S603
+        [bash, "-e", "-c", step["run"]], cwd=tmp_path, env=env, check=True
+    )
+    return github_env.read_text().strip()
+
+
+GROUPS = '[tool.uv.dependency-groups]\n{group} = {{requires-python = "{floor}"}}\n'
+
+
+@pytest.mark.parametrize(
+    ("job", "uv_table", "group", "group_floor", "minor"),
+    [
+        # lint's later bare `uv run` installs the configured default groups
+        ("reusable-ci/lint", 'default-groups = ["ops"]\n', "ops", ">=3.13", "3.13"),
+        # group names compare normalized: "Ops" names the group "ops"
+        ("reusable-docs/build", 'default-groups = ["Ops"]\n', "ops", ">=3.13", "3.13"),
+        # docs' `uv sync --group docs` keeps the defaults, which are dev unless set
+        ("reusable-docs/build", "", "dev", ">=3.13", "3.13"),
+        ("reusable-docs/build", "default-groups = []\n", "dev", ">=3.14", "3.12"),
+        # the wheel job installs only the test group
+        ("reusable-ci/wheel", "", "dev", ">=3.14", "3.12"),
+    ],
+)
+def test_the_floor_follows_the_groups_each_job_installs(
+    job, uv_table, group, group_floor, minor, tmp_path
+) -> None:
+    pyproject = '[project]\nname = "demo"\nrequires-python = ">=3.12"\n'
+    pyproject += (
+        "[tool.uv]\n" + uv_table + GROUPS.format(group=group, floor=group_floor)
+    )
+
+    written = _run_floor_step(job, pyproject, tmp_path)
+
+    assert written.removeprefix("UV_PYTHON=").startswith(f"=={minor}.*,"), written
