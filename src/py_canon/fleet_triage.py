@@ -636,16 +636,15 @@ def scan(fleet: list[str], previous_body: str = "") -> list[RepoStatus]:
     since = (datetime.now(tz=UTC) - timedelta(days=7)).date().isoformat()
     for repo in fleet:
         try:
-            runs = json.loads(
+            pages = json.loads(
                 _gh(
                     "api",
                     "--paginate",
                     "--slurp",
                     f"repos/{repo}/actions/runs?per_page=100&created=>={since}",
-                    "--jq",
-                    "[.[] | .workflow_runs[]]",
                 )
             )
+            runs = [run for page in pages for run in page["workflow_runs"]]
         except (GhError, json.JSONDecodeError):
             red.append(RepoStatus(repo=repo, conclusion="inaccessible"))
             continue
