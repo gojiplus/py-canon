@@ -4,10 +4,12 @@ Nothing here touches the network: every function under test is either pure or
 takes the `gh` output as an argument.
 """
 
+import json
 from pathlib import Path
 
 import pytest
 
+from py_canon import fleet_triage
 from py_canon.fleet_triage import (
     RepoStatus,
     _error_lines,
@@ -26,9 +28,9 @@ from py_canon.fleet_triage import (
 # is not exercised here is a rule that will be rediscovered in production.
 CLASSIFY_CASES = [
     # (canon ci, same-sha flip, step overlaps, expected)
-    (True, True, True, "canon"),
+    (True, True, True, "ecosystem"),
     (True, True, False, "ecosystem"),
-    (True, False, True, "canon"),
+    (True, False, True, "repo"),
     (True, False, False, "repo"),
     (False, True, True, "ecosystem"),
     (False, True, False, "ecosystem"),
@@ -221,9 +223,9 @@ def test_render_groups_by_class_and_correlates() -> None:
         uses_canon_ci=True,
     )
     body = render_issue([a, b], "2026-08-14")
-    assert "## Canon-caused" in body
+    assert "## Repo-specific" in body
+    assert "## Canon-caused" not in body
     assert "step `Pyright` is failing on 2 repos" in body
-    assert "not with a pull request per repo" in body
 
 
 def test_render_correlates_a_shared_host() -> None:
@@ -290,3 +292,101 @@ def test_preen_findings_reach_the_excerpt() -> None:
     lines = _error_lines(log)
 
     assert any("moving tag" in line for line in lines)
+
+
+def test_gate_is_not_a_root_cause():
+    status = RepoStatus(
+        repo="o/a", failed_steps=[("gate", "Assert no upstream job failed")]
+    )
+    assert status.step_names == set()
+    assert not is_mechanical(status)
+
+
+def test_one_repo_with_two_failed_runs_is_not_cross_repo_evidence():
+    status = RepoStatus(repo="o/a", failed_steps=[("lint", "Pyright")])
+    assert shared_step_names([status, status]) == set()
+
+
+def test_shared_tool_failure_requires_log_evidence():
+    status = RepoStatus(
+        repo="o/a",
+        uses_canon_ci=True,
+        failed_steps=[("lint", "Preen")],
+        excerpt=_error_lines(
+            "cause: Because the current Python version (3.11.14) does not satisfy "
+            "Python>=3.12 and preen==0.7.0 depends on Python>=3.12, "
+            "preen==0.7.0 cannot be used."
+        ),
+    )
+    assert classify(status, {"Preen"}) == "canon"
+
+
+def test_repository_backend_error_is_not_a_shared_tool_defect():
+    status = RepoStatus(
+        repo="o/a",
+        uses_canon_ci=True,
+        failed_steps=[("lint", "Preen")],
+        excerpt=[
+            "[warning] metadata: build-system must use a compatible requirement; "
+            "found hatchling"
+        ],
+    )
+    assert classify(status, {"Preen"}) == "repo"
+
+
+def test_scan_preserves_distinct_workflows_and_approvals(monkeypatch):
+    def run(number, workflow, conclusion, branch="main", event="schedule"):
+        return {
+            "id": number,
+            "workflow_id": workflow,
+            "name": str(workflow),
+            "head_branch": branch,
+            "head_sha": str(number),
+            "event": event,
+            "conclusion": conclusion,
+            "created_at": f"2026-10-19T0{number}:00:00Z",
+        }
+
+    runs = [
+        run(1, 10, "failure"),
+        run(2, 10, "success", event="push"),
+        run(3, 20, "failure"),
+        run(4, 30, "action_required", "update"),
+        run(5, 10, "failure", "other-branch"),
+    ]
+    pages = [{"workflow_runs": runs[:2]}, {"workflow_runs": runs[2:]}]
+    monkeypatch.setattr(fleet_triage, "_gh", lambda *a, **k: json.dumps(pages))
+    monkeypatch.setattr(fleet_triage, "failed_steps", lambda *a: [])
+    monkeypatch.setattr(fleet_triage, "error_excerpt", lambda *a: [])
+    statuses = fleet_triage.scan(["o/a"])
+    assert len(statuses) == 4
+    assert next(s for s in statuses if s.run_id == 2).recovered
+    assert not next(s for s in statuses if s.run_id == 5).recovered
+    assert {classify(s, set()) for s in statuses} == {"recovered", "repo", "approval"}
+    body = render_issue(statuses, "2026-10-19")
+    assert "Recovered" in body
+    assert "Approval required" in body
+
+
+def test_unreadable_history_is_not_green(monkeypatch):
+    def unavailable(*args, **kwargs):
+        raise fleet_triage.GhError("unavailable")
+
+    monkeypatch.setattr(fleet_triage, "_gh", unavailable)
+    statuses = fleet_triage.scan(["o/a"])
+    assert len(statuses) == 1
+    assert classify(statuses[0], set()) == "inaccessible"
+
+
+def test_diagnostic_correlations_preserve_shared_revision():
+    statuses = [
+        RepoStatus(repo="o/a", workflow_revision="abc", excerpt=["error: tool failed"]),
+        RepoStatus(repo="o/b", workflow_revision="abc", excerpt=["error: tool failed"]),
+        RepoStatus(repo="o/c", workflow_revision="def", excerpt=["error: tool failed"]),
+    ]
+    body = render_issue(statuses, "2026-10-19")
+    assert (
+        "diagnostic `error: tool failed` recurs at shared revision `abc`: `o/a`, `o/b`"
+        in body
+    )
+    assert "recurs at shared revision `def`" not in body

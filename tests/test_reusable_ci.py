@@ -235,7 +235,7 @@ def _preen_invocations(command: str) -> list[str]:
 def test_preen_version_is_pinned() -> None:
     """A Preen release must not change every caller's CI without review."""
     workflow = WORKFLOW.read_text()
-    pinned = "uvx --from preen==0.7.0 preen check --strict --skip tests"
+    pinned = "uvx --python 3.12 --from preen==0.7.1 preen check --strict --skip tests"
     assert pinned in workflow
     assert "run: uvx preen check" not in workflow
     # Every workflow, the template smoke job included, must run the same Preen
@@ -253,7 +253,8 @@ def test_preen_version_is_pinned() -> None:
     ]
     assert invocations, "no workflow runs Preen"
     for name, call in invocations:
-        assert re.search(r"--from preen==0\.7\.0\s", call), f"{name}: {call}"
+        assert "--python 3.12" in call, f"{name}: {call}"
+        assert re.search(r"--from preen==0\.7\.1\s", call), f"{name}: {call}"
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow
 
 
@@ -584,3 +585,19 @@ def test_the_floor_follows_the_groups_each_job_installs(
     written = _run_floor_step(job, pyproject, tmp_path)
 
     assert written.removeprefix("UV_PYTHON=").startswith(f"=={minor}.*,"), written
+
+
+def test_auto_merge_inherits_the_callers_check_read_permissions():
+    shared = yaml.safe_load(
+        (WORKFLOW.parent / "reusable-dependabot-auto-merge.yml").read_text()
+    )
+    assert "permissions" not in shared
+    assert "permissions" not in shared["jobs"]["sweep"]
+    for path in [
+        WORKFLOW.parent / "dependabot-auto-merge.yml",
+        WORKFLOW.parents[2] / "template/.github/workflows/dependabot-auto-merge.yml",
+    ]:
+        caller = yaml.safe_load(path.read_text())
+        permissions = caller["jobs"]["auto-merge"]["permissions"]
+        assert permissions["checks"] == "read"
+        assert permissions["statuses"] == "read"

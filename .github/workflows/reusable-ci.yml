@@ -31,6 +31,10 @@ on:
         description: 'Run preen check --strict in the lint job'
         type: boolean
         default: true
+      run-dependency-review:
+        description: 'Run GitHub dependency review (requires Code Security on private repositories)'
+        type: boolean
+        default: true
       run-wheel:
         description: 'Install the built wheel in a clean environment and run tests'
         type: boolean
@@ -53,7 +57,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Use the package's minimum Python
         # uv uses the runner's own Python (3.12) only when it satisfies
         # requires-python; otherwise it downloads the newest release, which can be
@@ -189,7 +193,7 @@ jobs:
         # 15m15s while pytest was still going.
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: uvx --from preen==0.7.0 preen check --strict --skip tests
+        run: uvx --python 3.12 --from preen==0.7.1 preen check --strict --skip tests
 
   test:
     runs-on: ${{ matrix.os }}
@@ -208,7 +212,7 @@ jobs:
         os: ${{ fromJSON(inputs.os) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Sync environment
@@ -265,7 +269,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0  # remove after the existing dynamic-version repos migrate
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Use the package's minimum Python
         # uv uses the runner's own Python (3.12) only when it satisfies
         # requires-python; otherwise it downloads the newest release, which can be
@@ -389,12 +393,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Zizmor (Actions security lint)
         run: uvx zizmor --min-severity high .github/workflows/
 
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && inputs.run-dependency-review
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -424,7 +428,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Fetch the base branch lock
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}

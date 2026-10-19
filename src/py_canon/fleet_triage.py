@@ -25,10 +25,9 @@ import base64
 import json
 import re
 import subprocess
-import sys
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # Workflow names that count as "the repo's CI". Legacy adopters predate the
@@ -63,6 +62,7 @@ ECHOED_SCRIPT = re.compile(r"(?:\x1b|\^\[)\[36;1m")
 ERROR_PATTERNS = (
     re.compile(r"^E\s{2,}"),  # pytest assertion detail
     re.compile(r"##\[error\]"),
+    re.compile(r"^\s*cause:"),
     re.compile(r"^\s*Traceback \(most recent call last\)"),
     re.compile(r"\bFAILED\b"),
     re.compile(r"\b(?:error|Error|ERROR):"),
@@ -103,6 +103,9 @@ FIRST_SEEN_PATTERN = re.compile(
 )
 
 CLASS_HEADINGS = {
+    "approval": ("Approval required", "These workflows have not been approved to run."),
+    "inaccessible": ("Unavailable evidence", "Run history could not be read."),
+    "recovered": ("Recovered", "A later run of this workflow and branch passed."),
     "canon": (
         "Canon-caused",
         "A shared workflow or the `v1` tag. Fix once **here** and promote — "
@@ -132,7 +135,7 @@ class RepoStatus:
 
     Attributes:
         repo: ``owner/name``.
-        branch: The default branch that is red.
+        branch: The branch associated with the run.
         conclusion: The failing run's conclusion.
         run_id: The failing run's numeric id.
         run_url: Web URL of the failing run.
@@ -143,6 +146,9 @@ class RepoStatus:
         same_sha_flip: Whether an earlier green run shares the red run's
             ``head_sha`` — unchanged code that went red on its own.
         first_seen: Date this repo first appeared red, carried across scans.
+        workflow: Workflow name.
+        workflow_revision: Shared workflow commit hashes recorded by GitHub.
+        recovered: A later completed run passed after a failure.
     """
 
     repo: str
@@ -155,11 +161,18 @@ class RepoStatus:
     uses_canon_ci: bool = False
     same_sha_flip: bool = False
     first_seen: str = ""
+    workflow: str = "CI"
+    workflow_revision: str = ""
+    recovered: bool = False
 
     @property
     def step_names(self) -> set[str]:
         """Distinct failed step names, used for cross-repo correlation."""
-        return {step for _, step in self.failed_steps}
+        return {
+            step
+            for _, step in self.failed_steps
+            if step != "Assert no upstream job failed"
+        }
 
     @property
     def hosts(self) -> set[str]:
@@ -399,27 +412,27 @@ def uses_canon_ci(repo: str) -> bool:
 def classify(status: RepoStatus, shared_steps: set[str]) -> str:
     """Decide who owns a failure.
 
-    The rules, in order:
-
-    1. A repo that does not consume canon's CI cannot have been broken by it.
-       If its unchanged code went red on its own, that is the ecosystem;
-       otherwise it is the repo's own change.
-    2. Among repos that do consume canon's CI, the same step failing on more
-       than one repo at once is canon's — a lone repo failing a shared step is
-       far more likely to be its own code hitting a shared check.
-    3. Everything else is the repo's.
+    Approval requirements, unavailable evidence, and recoveries are separate
+    states. Shared step names alone do not establish ownership. Known shared
+    tool failures must also appear in the log. A same-commit regression suggests
+    an ecosystem change; other failures remain repo-specific.
 
     Args:
         status: The collected facts for one repo.
         shared_steps: Failed step names seen on two or more repos in this scan.
 
     Returns:
-        One of ``canon``, ``ecosystem``, ``repo``.
+        One of the states in :data:`CLASS_HEADINGS`.
     """
-    overlaps = bool(status.step_names & shared_steps)
-    if not status.uses_canon_ci:
-        return "ecosystem" if status.same_sha_flip else "repo"
-    if overlaps:
+    if status.conclusion == "action_required":
+        return "approval"
+    if status.conclusion == "inaccessible":
+        return "inaccessible"
+    if status.recovered:
+        return "recovered"
+    evidence = "\n".join(status.excerpt)
+    shared_defect = "preen==" in evidence and "depends on Python>=3.12" in evidence
+    if status.uses_canon_ci and shared_defect and status.step_names & shared_steps:
         return "canon"
     return "ecosystem" if status.same_sha_flip else "repo"
 
@@ -438,7 +451,7 @@ def is_mechanical(status: RepoStatus) -> bool:
     Returns:
         True when every failed step is a conformance or lint step.
     """
-    if not status.failed_steps:
+    if not status.step_names:
         return False
     return all(
         any(marker in step.casefold() for marker in CONFORMANCE_STEP_MARKERS)
@@ -469,7 +482,9 @@ def shared_step_names(statuses: list[RepoStatus]) -> set[str]:
     Returns:
         The step names that correlate across repos.
     """
-    counts = Counter(step for s in statuses for step in s.step_names)
+    counts = Counter(
+        step for _, step in {(s.repo, step) for s in statuses for step in s.step_names}
+    )
     return {step for step, n in counts.items() if n >= 2}
 
 
@@ -500,20 +515,39 @@ def _correlations(statuses: list[RepoStatus], shared: set[str]) -> list[str]:
     """
     lines: list[str] = []
     for step in sorted(shared):
-        repos = sorted(s.repo for s in statuses if step in s.step_names)
+        repos = sorted({s.repo for s in statuses if step in s.step_names})
         lines.append(
             f"- step `{step}` is failing on {len(repos)} repos: "
             + ", ".join(f"`{r}`" for r in repos)
         )
 
-    host_counts = Counter(host for s in statuses for host in s.hosts)
+    host_counts = Counter(
+        host for _, host in {(s.repo, host) for s in statuses for host in s.hosts}
+    )
     for host, n in sorted(host_counts.items()):
         if n < 2:
             continue
-        repos = sorted(s.repo for s in statuses if host in s.hosts)
+        repos = sorted({s.repo for s in statuses if host in s.hosts})
         lines.append(
             f"- `{host}` appears in {n} repos' errors: "
             + ", ".join(f"`{r}`" for r in repos)
+        )
+    diagnostics: dict[tuple[str, str], set[str]] = {}
+    for status in statuses:
+        if status.recovered or status.conclusion == "action_required":
+            continue
+        for line in status.excerpt:
+            if "Process completed with exit code" in line:
+                continue
+            key = (status.workflow_revision, _normalize(line))
+            diagnostics.setdefault(key, set()).add(status.repo)
+    for (revision, diagnostic), repos in sorted(diagnostics.items()):
+        if len(repos) < 2:
+            continue
+        suffix = f" at shared revision `{revision}`" if revision else ""
+        lines.append(
+            f"- diagnostic `{diagnostic}` recurs{suffix}: "
+            + ", ".join(f"`{repo}`" for repo in sorted(repos))
         )
     return lines
 
@@ -529,13 +563,13 @@ def render_issue(statuses: list[RepoStatus], today: str) -> str:
         Markdown body.
     """
     shared = shared_step_names(statuses)
-    parts = [f"Repos with failing default-branch CI as of {today}:", ""]
+    parts = [f"Fleet workflow health as of {today}:", ""]
 
     correlations = _correlations(statuses, shared)
     if correlations:
         parts += ["## Across repos", "", *correlations, ""]
 
-    by_class: dict[str, list[RepoStatus]] = {"canon": [], "ecosystem": [], "repo": []}
+    by_class: dict[str, list[RepoStatus]] = {name: [] for name in CLASS_HEADINGS}
     for status in statuses:
         by_class[classify(status, shared)].append(status)
 
@@ -569,57 +603,105 @@ def _render_repo(status: RepoStatus, today: str) -> list[str]:
     first_seen = status.first_seen or today
     tags = " · external resource" if is_external_resource(status) else ""
     lines = [
-        f"- [ ] `{status.repo}` — `{status.branch}` CI **{status.conclusion}**"
+        f"- [ ] `{status.repo}` — `{status.branch}` {status.workflow} "
+        f"**{status.conclusion}**"
         f" ({FIRST_SEEN_MARKER} {first_seen}{tags})"
     ]
     if status.run_url:
         lines.append(f"  - run: {status.run_url}")
+    if status.workflow_revision:
+        lines.append(f"  - shared workflow revision: `{status.workflow_revision}`")
     for job, step in status.failed_steps[:4]:
         lines.append(f"  - failed: `{job}` → `{step}`")
     if status.excerpt:
         lines += ["", "  ```", *[f"  {line}" for line in status.excerpt], "  ```", ""]
-    else:
+    elif not status.recovered and status.conclusion != "action_required":
         lines.append("  - no log excerpt (logs expired or unreadable)")
     return lines
 
 
 def scan(fleet: list[str], previous_body: str = "") -> list[RepoStatus]:
-    """Collect the facts for every red repo in the fleet.
+    """Collect workflow failures, approval requirements, and recoveries.
 
     Args:
         fleet: Repository slugs.
         previous_body: The previous issue body, for first-seen carry-over.
 
     Returns:
-        One :class:`RepoStatus` per red repo, in FLEET order.
+        One :class:`RepoStatus` per affected workflow, branch, and event.
     """
     first_seen = parse_first_seen(previous_body)
     red: list[RepoStatus] = []
 
+    since = (datetime.now(tz=UTC) - timedelta(days=7)).date().isoformat()
     for repo in fleet:
-        branch = _gh("api", f"repos/{repo}", "--jq", ".default_branch", check=False)
-        if not branch:
+        try:
+            pages = json.loads(
+                _gh(
+                    "api",
+                    "--paginate",
+                    "--slurp",
+                    f"repos/{repo}/actions/runs?per_page=100&created=>={since}",
+                )
+            )
+            runs = [run for page in pages for run in page["workflow_runs"]]
+        except (GhError, json.JSONDecodeError):
+            red.append(RepoStatus(repo=repo, conclusion="inaccessible"))
             continue
-        runs = latest_ci_runs(repo, branch)
-        latest = next((r for r in runs if r.get("conclusion")), None)
-        if latest is None or latest.get("conclusion") not in RED_CONCLUSIONS:
-            continue
-
-        run_id = int(latest["id"])
-        status = RepoStatus(
-            repo=repo,
-            branch=branch,
-            conclusion=str(latest["conclusion"]),
-            run_id=run_id,
-            run_url=str(latest.get("html_url", "")),
-            failed_steps=failed_steps(repo, run_id),
-            excerpt=error_excerpt(repo, run_id),
-            uses_canon_ci=uses_canon_ci(repo),
-            same_sha_flip=detect_same_sha_flip(runs),
-            first_seen=first_seen.get(repo, ""),
-        )
-        red.append(status)
-        print(f"red: {repo} ({status.conclusion})", file=sys.stderr)  # noqa: T201
+        groups: dict[tuple, list[dict]] = {}
+        for run in runs:
+            key = (
+                run.get("workflow_id"),
+                run.get("head_branch"),
+                (run.get("head_repository") or {}).get("id"),
+            )
+            groups.setdefault(key, []).append(run)
+        for history in groups.values():
+            history.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+            latest = next(
+                (
+                    r
+                    for r in history
+                    if r.get("conclusion") not in (None, "", "cancelled", "skipped")
+                ),
+                None,
+            )
+            if latest is None:
+                continue
+            failures = [r for r in history if r.get("conclusion") in RED_CONCLUSIONS]
+            recovered = latest.get("conclusion") == "success" and bool(failures)
+            approval = latest.get("conclusion") == "action_required"
+            if (
+                not recovered
+                and not approval
+                and latest.get("conclusion") not in RED_CONCLUSIONS
+            ):
+                continue
+            run_id = int(latest["id"])
+            references = latest.get("referenced_workflows") or []
+            red.append(
+                RepoStatus(
+                    repo=repo,
+                    branch=str(latest.get("head_branch", "")),
+                    conclusion=str(latest["conclusion"]),
+                    run_id=run_id,
+                    run_url=str(latest.get("html_url", "")),
+                    workflow=str(latest.get("name", "workflow")),
+                    workflow_revision=", ".join(r.get("sha", "") for r in references),
+                    recovered=recovered,
+                    failed_steps=[]
+                    if recovered or approval
+                    else failed_steps(repo, run_id),
+                    excerpt=[]
+                    if recovered or approval
+                    else error_excerpt(repo, run_id),
+                    uses_canon_ci=any(
+                        CANON_CI_REF in r.get("path", "") for r in references
+                    ),
+                    same_sha_flip=detect_same_sha_flip(history),
+                    first_seen=first_seen.get(repo, ""),
+                )
+            )
 
     return red
 
@@ -668,7 +750,7 @@ def main(argv: list[str] | None = None) -> int:
         Process exit status.
     """
     parser = argparse.ArgumentParser(description="Root-cause a red fleet.")
-    parser.add_argument("--fleet", type=Path, default=Path("FLEET"))
+    parser.add_argument("--fleet", type=Path, action="append")
     parser.add_argument("--issue-repo", default="")
     parser.add_argument("--label", default="fleet-health")
     parser.add_argument("--title", default="Fleet health: failing CI")
@@ -684,7 +766,10 @@ def main(argv: list[str] | None = None) -> int:
         _existing_issue(args.issue_repo, args.label) if args.issue_repo else (None, "")
     )
 
-    statuses = scan(read_fleet(args.fleet), previous)
+    fleet = sorted(
+        {repo for path in args.fleet or [Path("FLEET")] for repo in read_fleet(path)}
+    )
+    statuses = scan(fleet, previous)
 
     if not statuses:
         if args.dry_run:
