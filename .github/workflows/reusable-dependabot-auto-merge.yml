@@ -39,10 +39,9 @@ on:
         type: number
         default: 12
 
-# Granted per job rather than here: a workflow-level write grant applies to
-# every job, which zizmor's excessive-permissions audit rejects once there is
-# more than one.
-permissions: {}
+# The sweep inherits the caller's token permissions. Callers grant contents and
+# pull-requests write, plus checks and statuses read. Inheritance lets callers
+# add read permissions before this shared workflow rolls out.
 
 env:
   STALE_AFTER_HOURS: ${{ inputs.stale-after-hours }}
@@ -210,9 +209,6 @@ jobs:
     name: Re-arm stranded PRs
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write        # arm auto-merge, or squash-merge outright
-      pull-requests: write   # read labels, merge
     if: github.event_name != 'pull_request'
     steps:
       - name: Collect open Dependabot PRs

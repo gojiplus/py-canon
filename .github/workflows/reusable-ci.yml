@@ -31,6 +31,10 @@ on:
         description: 'Run preen check --strict in the lint job'
         type: boolean
         default: true
+      run-dependency-review:
+        description: 'Run GitHub dependency review (requires Code Security on private repositories)'
+        type: boolean
+        default: true
       run-wheel:
         description: 'Install the built wheel in a clean environment and run tests'
         type: boolean
@@ -189,7 +193,7 @@ jobs:
         # 15m15s while pytest was still going.
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: uvx --from preen==0.7.0 preen check --strict --skip tests
+        run: uvx --python 3.12 --from preen==0.7.1 preen check --strict --skip tests
 
   test:
     runs-on: ${{ matrix.os }}
@@ -394,7 +398,7 @@ jobs:
         run: uvx zizmor --min-severity high .github/workflows/
 
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && inputs.run-dependency-review
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

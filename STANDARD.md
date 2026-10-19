@@ -207,7 +207,9 @@ Every repo's workflows are thin shims calling this repo's reusable workflows:
 - `ci.yml` → lint (ruff check + format, pyright, pydoclint), test matrix
   (floor + ceiling), **wheel validation** (build the wheel, run `twine check`,
   install it in a clean env, and run the test suite against the installed
-  package), `zizmor` on workflow files, dependency review on PRs.
+  package), `zizmor` on workflow files, dependency review on PRs. Private
+  repositories without GitHub Code Security must set `run-dependency-review:
+  false`; Preen's dependency audit remains enabled.
 - `docs.yml` → sphinx build with `-W` and doctests, deploy to GitHub Pages
   on default-branch pushes.
 - `release.yml` → tag-driven publish as above.
@@ -342,21 +344,18 @@ Detection: every repo's CI runs weekly on cron (dormant repos surface
 ecosystem drift); the daily **fleet-health** workflow here scans every repo in
 `FLEET` and maintains a single "Fleet health" issue.
 
-Triage: that issue is not a list of names. `py_canon.fleet_triage` also
-records, per red repo, the failed job and step, an excerpt of the error lines,
-how long it has been red, and an origin — from two rules, not a guess:
+Triage covers all workflows and branches with runs in the last seven days,
+including dependency updates. The health workflow also reads `FLEET_HEALTH` for
+maintained repositories outside the Python template fleet. Each entry records the failed job and step,
+error excerpt, workflow revision, and first-seen date. Approval requirements,
+unreadable run history, and recovery after a later successful run are reported
+separately.
 
-- *Did unchanged code go red?* An earlier green run on the same `head_sha`
-  means the cause is outside the repo. This is what the weekly cron is for.
-- *Is more than one repo failing the same step?* One repo failing a shared
-  check is usually its own code; several at once is canon's.
-
-It also correlates across repos — a step or a hostname appearing in two or
-more failures at once. That is the only view in which a shared dependency
-breaking looks like one problem instead of five unrelated ones.
-
-The origin is a rule, not a diagnosis. It is right often enough to route the
-work and always shows the evidence it used.
+A repeated step name is a correlation, not evidence of a shared defect. The
+classifier assigns a shared origin only when the logs also identify a known
+shared-tool failure. An earlier green run of the same commit suggests ecosystem
+drift. Other failures remain repo-specific pending investigation. The final
+gate is excluded from correlations because it only repeats an upstream failure.
 
 Response, by origin:
 1. **Canon-caused** (reusable workflow / template bug): fix in canon; the
