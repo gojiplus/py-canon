@@ -207,7 +207,9 @@ Every repo's workflows are thin shims calling this repo's reusable workflows:
 - `ci.yml` → lint (ruff check + format, pyright, pydoclint), test matrix
   (floor + ceiling), **wheel validation** (build the wheel, run `twine check`,
   install it in a clean env, and run the test suite against the installed
-  package), `zizmor` on workflow files, dependency review on PRs.
+  package), `zizmor` on workflow files, dependency review on PRs. Private
+  repositories without GitHub Code Security must set `run-dependency-review:
+  false`; Preen's dependency audit remains enabled.
 - `docs.yml` → sphinx build with `-W` and doctests, deploy to GitHub Pages
   on default-branch pushes.
 - `release.yml` → tag-driven publish as above.

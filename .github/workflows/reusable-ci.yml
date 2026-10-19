@@ -31,6 +31,10 @@ on:
         description: 'Run preen check --strict in the lint job'
         type: boolean
         default: true
+      run-dependency-review:
+        description: 'Run GitHub dependency review (requires Code Security on private repositories)'
+        type: boolean
+        default: true
       run-wheel:
         description: 'Install the built wheel in a clean environment and run tests'
         type: boolean
@@ -394,7 +398,7 @@ jobs:
         run: uvx zizmor --min-severity high .github/workflows/
 
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && inputs.run-dependency-review
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
