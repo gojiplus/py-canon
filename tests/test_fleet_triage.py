@@ -354,7 +354,8 @@ def test_scan_preserves_distinct_workflows_and_approvals(monkeypatch):
         run(4, 30, "action_required", "update"),
         run(5, 10, "failure", "other-branch"),
     ]
-    monkeypatch.setattr(fleet_triage, "_gh", lambda *a, **k: json.dumps(runs))
+    pages = [{"workflow_runs": runs[:2]}, {"workflow_runs": runs[2:]}]
+    monkeypatch.setattr(fleet_triage, "_gh", lambda *a, **k: json.dumps(pages))
     monkeypatch.setattr(fleet_triage, "failed_steps", lambda *a: [])
     monkeypatch.setattr(fleet_triage, "error_excerpt", lambda *a: [])
     statuses = fleet_triage.scan(["o/a"])
