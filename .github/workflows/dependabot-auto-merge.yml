@@ -16,6 +16,8 @@ permissions: {}
 jobs:
   auto-merge:
     permissions:
+      checks: read
+      statuses: read
       contents: write        # arm auto-merge, or squash-merge outright
       pull-requests: write   # label, comment, merge
     # Self-reference by path, not @v1: this repo defines the workflow, so it

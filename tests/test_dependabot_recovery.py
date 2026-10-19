@@ -95,7 +95,7 @@ def _script():
 def test_sweep_decision(tmp_path, armed, merge, checks, required, action, reason):
     pr = {
         "number": 1,
-        "url": "https://github.com/example/repo/pull/1",
+        "url": "https://example.com/repo/pull/1",
         "createdAt": "2020-01-01T00:00:00Z",
         "autoMergeRequest": {} if not armed else {"enabled": True},
         "mergeStateStatus": merge,

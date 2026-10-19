@@ -1,0 +1,9 @@
+# Additional workflow monitoring; these repos do not adopt Python templates.
+finite-sample/dp_deliberately
+gojiplus/adjacent
+gojiplus/delegate
+gojiplus/litellm
+gojiplus/mimiq
+gojiplus/reader
+soodoku/soodoku.github.io
+themains/rdomains

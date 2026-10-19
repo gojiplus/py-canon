@@ -107,7 +107,7 @@ jobs:
           # `template` reports drift because the project is generated from an
           # unreleased commit, so its recorded _commit is ahead of the latest
           # tag. The other sixteen checks gate.
-          uvx --from preen==0.7.0 preen check --strict --skip links --skip template
+          uvx --python 3.12 --from preen==0.7.1 preen check --strict --skip links --skip template
           echo "template smoke test: full gate green"
 
   promote:

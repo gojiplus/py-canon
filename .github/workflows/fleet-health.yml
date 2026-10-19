@@ -1,6 +1,6 @@
 name: Fleet health
 
-# Daily scan of every adopted repo's default-branch CI. Failures are
+# Daily scan of the fleet's workflows and branches. Failures are
 # root-caused and aggregated into a single pinned issue on this repo, so red
 # repos are discovered centrally and triaged once rather than per visit.
 #
@@ -31,5 +31,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           uv run python -m py_canon.fleet_triage \
-            --fleet FLEET \
+            --fleet FLEET --fleet FLEET_HEALTH \
             --issue-repo "$GITHUB_REPOSITORY"
