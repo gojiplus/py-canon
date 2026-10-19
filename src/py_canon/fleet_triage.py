@@ -431,9 +431,7 @@ def classify(status: RepoStatus, shared_steps: set[str]) -> str:
     if status.recovered:
         return "recovered"
     evidence = "\n".join(status.excerpt)
-    shared_defect = (
-        "preen==" in evidence and "depends on Python>=3.12" in evidence
-    ) or "build-system must use a compatible requirement" in evidence
+    shared_defect = "preen==" in evidence and "depends on Python>=3.12" in evidence
     if status.uses_canon_ci and shared_defect and status.step_names & shared_steps:
         return "canon"
     return "ecosystem" if status.same_sha_flip else "repo"
@@ -653,7 +651,11 @@ def scan(fleet: list[str], previous_body: str = "") -> list[RepoStatus]:
             continue
         groups: dict[tuple, list[dict]] = {}
         for run in runs:
-            key = (run.get("workflow_id"), run.get("head_branch"), run.get("event"))
+            key = (
+                run.get("workflow_id"),
+                run.get("head_branch"),
+                (run.get("head_repository") or {}).get("id"),
+            )
             groups.setdefault(key, []).append(run)
         for history in groups.values():
             history.sort(key=lambda r: r.get("created_at", ""), reverse=True)

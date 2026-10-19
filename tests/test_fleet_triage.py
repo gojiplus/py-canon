@@ -312,35 +312,55 @@ def test_shared_tool_failure_requires_log_evidence():
         repo="o/a",
         uses_canon_ci=True,
         failed_steps=[("lint", "Preen")],
-        excerpt=["preen==0.7.0 depends on Python>=3.12"],
+        excerpt=_error_lines(
+            "cause: Because the current Python version (3.11.14) does not satisfy "
+            "Python>=3.12 and preen==0.7.0 depends on Python>=3.12, "
+            "preen==0.7.0 cannot be used."
+        ),
     )
     assert classify(status, {"Preen"}) == "canon"
 
 
+def test_repository_backend_error_is_not_a_shared_tool_defect():
+    status = RepoStatus(
+        repo="o/a",
+        uses_canon_ci=True,
+        failed_steps=[("lint", "Preen")],
+        excerpt=[
+            "[warning] metadata: build-system must use a compatible requirement; "
+            "found hatchling"
+        ],
+    )
+    assert classify(status, {"Preen"}) == "repo"
+
+
 def test_scan_preserves_distinct_workflows_and_approvals(monkeypatch):
-    def run(number, workflow, conclusion, branch="main"):
+    def run(number, workflow, conclusion, branch="main", event="schedule"):
         return {
             "id": number,
             "workflow_id": workflow,
             "name": str(workflow),
             "head_branch": branch,
             "head_sha": str(number),
-            "event": "schedule",
+            "event": event,
             "conclusion": conclusion,
             "created_at": f"2026-10-19T0{number}:00:00Z",
         }
 
     runs = [
         run(1, 10, "failure"),
-        run(2, 10, "success"),
+        run(2, 10, "success", event="push"),
         run(3, 20, "failure"),
         run(4, 30, "action_required", "update"),
+        run(5, 10, "failure", "other-branch"),
     ]
     monkeypatch.setattr(fleet_triage, "_gh", lambda *a, **k: json.dumps(runs))
     monkeypatch.setattr(fleet_triage, "failed_steps", lambda *a: [])
     monkeypatch.setattr(fleet_triage, "error_excerpt", lambda *a: [])
     statuses = fleet_triage.scan(["o/a"])
-    assert len(statuses) == 3
+    assert len(statuses) == 4
+    assert next(s for s in statuses if s.run_id == 2).recovered
+    assert not next(s for s in statuses if s.run_id == 5).recovered
     assert {classify(s, set()) for s in statuses} == {"recovered", "repo", "approval"}
     body = render_issue(statuses, "2026-10-19")
     assert "Recovered" in body
