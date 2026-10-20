@@ -16,6 +16,7 @@ permissions: {}
 jobs:
   auto-merge:
     permissions:
+      actions: write
       checks: read
       statuses: read
       contents: write        # arm auto-merge, or squash-merge outright

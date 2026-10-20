@@ -146,3 +146,70 @@ def test_api_failure_fails_the_workflow_step(tmp_path, step_name):
     )
     assert result.returncode != 0
     assert "Bad credentials" in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("job", "step_name"),
+    [
+        ("classify", "Check whether anything is actually required"),
+        ("sweep", "Collect open Dependabot PRs"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("mode", "success", "required"),
+    [
+        ("supported", True, "ci / gate\n"),
+        ("plan-limit", True, ""),
+        ("unauthorized", False, None),
+        ("forbidden", False, None),
+        ("rate-limit", False, None),
+        ("detail-failure", False, None),
+    ],
+)
+def test_required_checks_probe(tmp_path, job, step_name, mode, success, required):
+    workflow = yaml.safe_load(WORKFLOW.read_text())
+    step = next(s for s in workflow["jobs"][job]["steps"] if s["name"] == step_name)
+    gh = tmp_path / "gh"
+    gh.write_text(
+        """#!/bin/sh
+if [ "$1" = pr ]; then printf '[]'; exit 0; fi
+case "$*" in
+  *'/rulesets/'*)
+    if [ "$PROBE_MODE" = detail-failure ]; then
+      echo 'HTTP 401: Bad credentials' >&2; exit 1
+    fi
+    printf 'ci / gate\\n'; exit 0 ;;
+esac
+case "$PROBE_MODE" in
+  supported|detail-failure) printf '42\\n' ;;
+  plan-limit)
+    echo 'Upgrade to GitHub Pro or make this repository public' >&2
+    exit 1 ;;
+  unauthorized) echo 'HTTP 401: Bad credentials' >&2; exit 1 ;;
+  forbidden) echo 'HTTP 403: Resource not accessible by integration' >&2; exit 1 ;;
+  rate-limit) echo 'HTTP 429: Rate limit exceeded' >&2; exit 1 ;;
+esac
+"""
+    )
+    gh.chmod(0o755)
+    result = subprocess.run(  # noqa: S603 - executes the workflow under test.
+        ["/bin/bash", "-eo", "pipefail", "-c", step["run"]],
+        cwd=tmp_path,
+        env=dict(
+            os.environ,
+            PATH=f"{tmp_path}:{os.environ['PATH']}",
+            GH_REPO="example/repo",
+            GITHUB_OUTPUT=str(tmp_path / "output"),
+            PROBE_MODE=mode,
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (result.returncode == 0) is success, result.stdout + result.stderr
+    if required is not None:
+        assert (tmp_path / "required.txt").read_text() == required
+    if mode == "plan-limit":
+        assert "only the all-checks sweep may merge" in result.stdout
+        if job == "classify":
+            assert "count=0" in (tmp_path / "output").read_text()
