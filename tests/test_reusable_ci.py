@@ -599,5 +599,6 @@ def test_auto_merge_inherits_the_callers_check_read_permissions():
     ]:
         caller = yaml.safe_load(path.read_text())
         permissions = caller["jobs"]["auto-merge"]["permissions"]
+        assert permissions["actions"] == "write"
         assert permissions["checks"] == "read"
         assert permissions["statuses"] == "read"

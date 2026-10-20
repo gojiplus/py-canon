@@ -133,7 +133,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt
+          if ! gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt 2> ruleset-error.txt; then
+            if grep -Fq 'Upgrade to GitHub Pro or make this repository public' ruleset-error.txt; then
+              echo "::notice::Rulesets are unavailable on this repository's plan; only the all-checks sweep may merge."
+              : > ruleset-ids.txt
+            else
+              cat ruleset-error.txt >&2
+              exit 1
+            fi
+          fi
           while read -r id; do
                 gh api "repos/${GH_REPO}/rulesets/${id}" --jq \
                   '.rules[]? | select(.type=="required_status_checks")
@@ -227,7 +235,15 @@ jobs:
           # canceled by a concurrency collision -- and the PR sat BLOCKED for
           # weeks looking entirely green. Counting reported checks cannot see
           # that; comparing against the requirement can.
-          gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt
+          if ! gh api --paginate "repos/${GH_REPO}/rulesets" --jq '.[] | select(.enforcement == "active") | .id' > ruleset-ids.txt 2> ruleset-error.txt; then
+            if grep -Fq 'Upgrade to GitHub Pro or make this repository public' ruleset-error.txt; then
+              echo "::notice::Rulesets are unavailable on this repository's plan; only the all-checks sweep may merge."
+              : > ruleset-ids.txt
+            else
+              cat ruleset-error.txt >&2
+              exit 1
+            fi
+          fi
           while read -r id; do
                 gh api "repos/${GH_REPO}/rulesets/${id}" --jq \
                   '.rules[]? | select(.type=="required_status_checks")
