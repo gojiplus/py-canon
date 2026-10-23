@@ -11,6 +11,8 @@ not a release of its own.
 
 ### Changed
 
+- Reusable CI runs preen 0.7.2, whose `deptree` check no longer counts imports
+  inside functions or under `if TYPE_CHECKING:` as circular-import edges.
 - Jobs outside the test matrix (lint, wheel, docs build, release test and
   build) request the lowest minor version `requires-python` allows, intersected
   with dependency groups' own `requires-python` (for example
