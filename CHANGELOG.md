@@ -9,6 +9,15 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Removed
+
+- `reusable-release`'s `publish` job and its `publish-pypi` / `testpypi`
+  inputs. PyPI trusted publishing cannot work from a reusable workflow, so no
+  caller used it (checked across all 56 fleet `release.yml` files), but its
+  `id-token: write` forced every caller to grant that permission to the
+  reusable workflow. The template's `release` job no longer grants it; the
+  caller's own `publish` job keeps it.
+
 ### Changed
 
 - Reusable CI runs preen 0.7.2, whose `deptree` check no longer counts imports

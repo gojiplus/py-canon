@@ -3,19 +3,6 @@ name: Reusable Release
 on:
   workflow_call:
     inputs:
-      publish-pypi:
-        # PyPI trusted publishing does NOT support reusable workflows —
-        # the OIDC claims reference this file, not the caller's. Leave
-        # this false and put the publish job in the caller's release.yml
-        # (the template ships it); this job remains for token-based or
-        # future use.
-        description: 'Publish to (Test)PyPI from this reusable workflow'
-        type: boolean
-        default: false
-      testpypi:
-        description: 'Publish to TestPyPI instead of PyPI'
-        type: boolean
-        default: false
       github-release:
         description: 'Create a GitHub Release with generated notes'
         type: boolean
@@ -36,7 +23,7 @@ on:
         # Empty means "let uv choose", which is the only default that cannot be
         # wrong. A fixed version here was wrong for every project whose floor
         # was above it: uv could not resolve an interpreter, `test` died at
-        # Sync environment, and because build/publish/github-release all sit
+        # Sync environment, and because build and github-release sit
         # behind `test` they *skipped*. The visible symptom was a missing
         # GitHub Release rather than a version error, which is what made it
         # survive a real release (indicate v0.8.0).
@@ -238,37 +225,11 @@ jobs:
           name: dist
           path: dist/
 
-  publish:
-    if: inputs.publish-pypi
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: ${{ inputs.testpypi && 'testpypi' || 'pypi' }}
-    permissions:
-      id-token: write  # trusted publishing + attestations
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: dist
-          path: dist/
-      - name: Publish (trusted publishing, PEP 740 attestations)
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
-        with:
-          attestations: true
-          # Matches the template's publish step. This path is reachable only via
-          # publish-pypi: true, which defaults false because trusted publishing
-          # cannot bind its OIDC claims to a reusable workflow -- but leaving the
-          # two publish steps saying different things is exactly how their action
-          # pins came to be two months apart.
-          skip-existing: true
-          repository-url: ${{ inputs.testpypi && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
-
   github-release:
     if: >-
       !cancelled() && inputs.github-release && startsWith(github.ref, 'refs/tags/') &&
-      needs.build.result == 'success' &&
-      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
-    needs: [build, publish]
+      needs.build.result == 'success'
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
