@@ -64,11 +64,13 @@ require successful candidate CI before exposing a revision to consumers.
   flake8.
 - Two checks ruff cannot do run inside `preen check`, not as separate tools a
   repo configures:
-  - **Duplicated code.** pylint's similarity checker (R0801, nothing else of
-    pylint) over the import package. A block of 12 or more lines copied
-    between modules fails; tests, docs, examples and scripts outside the
-    package are not scanned. Share the code; mark a copy that must stay with
-    `# pylint: disable=duplicate-code` and a comment saying why.
+  - **Duplicated code.** jscpd over the import package, with identifiers
+    matched when renamed consistently. A block copied within one module or
+    between modules fails when every copy has 12 or more lines of code, not
+    counting imports, docstrings, comments, blank lines and def/class
+    signatures; tests, docs, examples and scripts outside the package are not
+    scanned. Share the code; mark a copy that must stay with
+    `# jscpd:ignore-start` and `# jscpd:ignore-end` and a comment saying why.
   - **US English.** codespell with `clear,rare,en-GB_to_en-US`, over file names
     and the text of Markdown, reST, Python (identifiers included), TOML, YAML
     and shell files outside data and fixture directories. Each repo also sets
