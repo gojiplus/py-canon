@@ -20,8 +20,14 @@ not a release of its own.
 
 ### Changed
 
-- Reusable CI runs preen 0.7.2, whose `deptree` check no longer counts imports
-  inside functions or under `if TYPE_CHECKING:` as circular-import edges.
+- Reusable CI runs preen 0.8.0. Its `duplicate-code` check runs jscpd instead
+  of pylint's similarity checker, so it also catches copies within one module
+  and copies with consistently renamed names; mark a deliberate copy with
+  `# jscpd:ignore-start`/`# jscpd:ignore-end`, since
+  `# pylint: disable=duplicate-code` no longer applies. Its `audit` check also
+  scans optional-dependency extras. Through 0.7.2, `deptree` no longer counts
+  imports inside functions or under `if TYPE_CHECKING:` as circular-import
+  edges.
 - Jobs outside the test matrix (lint, wheel, docs build, release test and
   build) request the lowest minor version `requires-python` allows, intersected
   with dependency groups' own `requires-python` (for example
