@@ -355,7 +355,22 @@ def test_scan_preserves_distinct_workflows_and_approvals(monkeypatch):
         run(5, 10, "failure", "other-branch"),
     ]
     pages = [{"workflow_runs": runs[:2]}, {"workflow_runs": runs[2:]}]
-    monkeypatch.setattr(fleet_triage, "_gh", lambda *a, **k: json.dumps(pages))
+
+    def gh(*args, **kwargs):
+        if args[-1] == "repos/o/a":
+            return json.dumps({"id": 1, "default_branch": "main"})
+        if "/pulls?" in args[-1]:
+            return json.dumps(
+                [
+                    [
+                        {"head": {"ref": branch, "sha": sha, "repo": {"id": None}}}
+                        for branch, sha in [("update", "4"), ("other-branch", "5")]
+                    ]
+                ]
+            )
+        return json.dumps(pages)
+
+    monkeypatch.setattr(fleet_triage, "_gh", gh)
     monkeypatch.setattr(fleet_triage, "failed_steps", lambda *a: [])
     monkeypatch.setattr(fleet_triage, "error_excerpt", lambda *a: [])
     statuses = fleet_triage.scan(["o/a"])
@@ -390,3 +405,147 @@ def test_diagnostic_correlations_preserve_shared_revision():
         in body
     )
     assert "recurs at shared revision `def`" not in body
+
+
+@pytest.fixture
+def scan_history(monkeypatch):
+    def setup(runs, pulls=(), unavailable=False):
+        def gh(*args, **kwargs):
+            endpoint = args[-1]
+            if endpoint == "repos/o/a":
+                return json.dumps({"id": 1, "default_branch": "main"})
+            if "/pulls?" in endpoint:
+                if unavailable:
+                    raise fleet_triage.GhError("cannot read PR state")
+                return json.dumps([list(pulls)])
+            return json.dumps([{"workflow_runs": runs}])
+
+        monkeypatch.setattr(fleet_triage, "_gh", gh)
+        monkeypatch.setattr(
+            fleet_triage, "failed_steps", lambda *a: [("test", "pytest")]
+        )
+        monkeypatch.setattr(fleet_triage, "error_excerpt", lambda *a: ["error: broken"])
+        return fleet_triage.scan(["o/a"])
+
+    return setup
+
+
+def workflow_run(number=1, branch="feature", sha="old", conclusion="failure"):
+    return {
+        "id": number,
+        "workflow_id": 10,
+        "name": "CI",
+        "head_branch": branch,
+        "head_repository": {"id": 1},
+        "head_sha": sha,
+        "conclusion": conclusion,
+        "created_at": f"2026-10-27T0{number}:00:00Z",
+    }
+
+
+def open_pull(sha="old", repo_id=1):
+    return {"head": {"ref": "feature", "sha": sha, "repo": {"id": repo_id}}}
+
+
+def test_closed_branch_failure_is_historical_not_recovered(scan_history):
+    (status,) = scan_history([workflow_run()])
+    assert classify(status, set()) == "historical"
+    assert status.conclusion == "failure"
+    assert not status.recovered
+
+
+def test_open_pr_failure_stays_actionable(scan_history):
+    (status,) = scan_history([workflow_run()], [open_pull()])
+    assert classify(status, set()) == "repo"
+
+
+def test_fork_branch_cannot_match_another_repository(scan_history):
+    (status,) = scan_history([workflow_run()], [open_pull(repo_id=2)])
+    assert classify(status, set()) == "historical"
+
+
+def test_new_pr_head_is_pending_instead_of_old_failure(scan_history):
+    (status,) = scan_history([workflow_run()], [open_pull(sha="new")])
+    assert classify(status, set()) == "pending"
+    assert status.failed_steps == []
+    assert status.run_id == 0
+
+
+@pytest.mark.parametrize("conclusion", [None, "cancelled", "skipped"])
+def test_current_run_does_not_resurrect_old_failure(scan_history, conclusion):
+    statuses = scan_history(
+        [
+            workflow_run(branch="main", conclusion="failure"),
+            workflow_run(2, "main", "new", conclusion),
+        ]
+    )
+    assert classify(statuses[0], set()) == "pending"
+
+
+def test_unreadable_pr_state_does_not_hide_failures(scan_history):
+    (status,) = scan_history([workflow_run()], unavailable=True)
+    assert classify(status, set()) == "inaccessible"
+
+
+def test_default_branch_failure_is_active_without_pr(scan_history):
+    (status,) = scan_history([workflow_run(branch="main")])
+    assert classify(status, set()) == "repo"
+
+
+@pytest.mark.parametrize("historical", [True, False])
+def test_only_history_or_recoveries_closes_issue(monkeypatch, tmp_path, historical):
+    fleet = tmp_path / "FLEET"
+    fleet.write_text("o/a\n")
+    status = RepoStatus(repo="o/a", recovered=not historical)
+    status.historical = historical
+    monkeypatch.setattr(fleet_triage, "scan", lambda *a: [status])
+    monkeypatch.setattr(fleet_triage, "_existing_issue", lambda *a: (108, ""))
+    calls = []
+    monkeypatch.setattr(fleet_triage, "_gh", lambda *a, **k: calls.append(a) or "")
+    fleet_triage.main(["--fleet", str(fleet), "--issue-repo", "o/canon"])
+    assert any(call[:2] == ("issue", "close") for call in calls)
+
+
+@pytest.mark.parametrize("state", ["pending", "inaccessible", "action_required"])
+def test_unknown_or_unvalidated_state_never_closes_issue(monkeypatch, tmp_path, state):
+    fleet = tmp_path / "FLEET"
+    fleet.write_text("o/a\n")
+    status = RepoStatus(repo="o/a", conclusion=state, pending=state == "pending")
+    monkeypatch.setattr(fleet_triage, "scan", lambda *a: [status])
+    monkeypatch.setattr(fleet_triage, "_existing_issue", lambda *a: (108, ""))
+    calls = []
+    monkeypatch.setattr(fleet_triage, "_gh", lambda *a, **k: calls.append(a) or "")
+    fleet_triage.main(["--fleet", str(fleet), "--issue-repo", "o/canon"])
+    assert not any(call[:2] == ("issue", "close") for call in calls)
+
+
+def test_historical_failures_do_not_create_active_correlations():
+    statuses = [
+        RepoStatus(repo="o/a", failed_steps=[("lint", "Preen")]),
+        RepoStatus(repo="o/b", historical=True, failed_steps=[("lint", "Preen")]),
+    ]
+    assert "Across repos" not in render_issue(statuses, "2026-10-27")
+
+
+def test_intentionally_skipped_automation_is_not_pending(scan_history):
+    assert scan_history([workflow_run(branch="main", conclusion="skipped")]) == []
+
+
+def test_new_pr_head_does_not_invalidate_previously_healthy_optional_workflow(
+    scan_history,
+):
+    assert (
+        scan_history([workflow_run(conclusion="success")], [open_pull(sha="new")]) == []
+    )
+
+
+def test_skipped_rerun_keeps_success_on_same_head(scan_history):
+    (status,) = scan_history(
+        [
+            workflow_run(branch="main"),
+            workflow_run(2, "main", "new", "success"),
+            workflow_run(3, "main", "new", "skipped"),
+        ]
+    )
+    assert status.recovered
+    assert not status.pending

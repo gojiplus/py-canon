@@ -351,7 +351,11 @@ including dependency updates. The health workflow also reads `FLEET_HEALTH` for
 maintained repositories outside the Python template fleet. Each entry records the failed job and step,
 error excerpt, workflow revision, and first-seen date. Approval requirements,
 unreadable run history, and recovery after a later successful run are reported
-separately.
+separately. Failures on branches that are neither the default nor an open PR
+are historical, not recovered. A newer pending run or a changed PR head is
+reported as awaiting validation instead of inheriting an older failure.
+Historical and recovered entries alone do not keep the health issue open;
+unavailable evidence and incomplete validation do.
 
 A repeated step name is a correlation, not evidence of a shared defect. The
 classifier assigns a shared origin only when the logs also identify a known

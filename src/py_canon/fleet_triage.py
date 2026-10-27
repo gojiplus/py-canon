@@ -103,6 +103,15 @@ FIRST_SEEN_PATTERN = re.compile(
 )
 
 CLASS_HEADINGS = {
+    "pending": (
+        "Awaiting current checks",
+        "The current revision has no completed validation.",
+    ),
+    "historical": (
+        "Historical branches",
+        "These branches are neither the default branch nor an open pull request. "
+        "Their failures are not recoveries.",
+    ),
     "approval": ("Approval required", "These workflows have not been approved to run."),
     "inaccessible": ("Unavailable evidence", "Run history could not be read."),
     "recovered": ("Recovered", "A later run of this workflow and branch passed."),
@@ -149,6 +158,8 @@ class RepoStatus:
         workflow: Workflow name.
         workflow_revision: Shared workflow commit hashes recorded by GitHub.
         recovered: A later completed run passed after a failure.
+        historical: The branch has no open pull request and is not the default.
+        pending: Current validation is missing, incomplete, canceled, or skipped.
     """
 
     repo: str
@@ -164,6 +175,8 @@ class RepoStatus:
     workflow: str = "CI"
     workflow_revision: str = ""
     recovered: bool = False
+    historical: bool = False
+    pending: bool = False
 
     @property
     def step_names(self) -> set[str]:
@@ -424,6 +437,10 @@ def classify(status: RepoStatus, shared_steps: set[str]) -> str:
     Returns:
         One of the states in :data:`CLASS_HEADINGS`.
     """
+    if status.historical:
+        return "historical"
+    if status.pending:
+        return "pending"
     if status.conclusion == "action_required":
         return "approval"
     if status.conclusion == "inaccessible":
@@ -562,10 +579,11 @@ def render_issue(statuses: list[RepoStatus], today: str) -> str:
     Returns:
         Markdown body.
     """
-    shared = shared_step_names(statuses)
+    active = [s for s in statuses if not (s.historical or s.recovered or s.pending)]
+    shared = shared_step_names(active)
     parts = [f"Fleet workflow health as of {today}:", ""]
 
-    correlations = _correlations(statuses, shared)
+    correlations = _correlations(active, shared)
     if correlations:
         parts += ["## Across repos", "", *correlations, ""]
 
@@ -615,7 +633,10 @@ def _render_repo(status: RepoStatus, today: str) -> list[str]:
         lines.append(f"  - failed: `{job}` → `{step}`")
     if status.excerpt:
         lines += ["", "  ```", *[f"  {line}" for line in status.excerpt], "  ```", ""]
-    elif not status.recovered and status.conclusion != "action_required":
+    elif (
+        not (status.recovered or status.historical or status.pending)
+        and status.conclusion != "action_required"
+    ):
         lines.append("  - no log excerpt (logs expired or unreadable)")
     return lines
 
@@ -636,6 +657,22 @@ def scan(fleet: list[str], previous_body: str = "") -> list[RepoStatus]:
     since = (datetime.now(tz=UTC) - timedelta(days=7)).date().isoformat()
     for repo in fleet:
         try:
+            metadata = json.loads(_gh("api", f"repos/{repo}"))
+            pull_pages = json.loads(
+                _gh(
+                    "api",
+                    "--paginate",
+                    "--slurp",
+                    f"repos/{repo}/pulls?state=open&per_page=100",
+                )
+            )
+            heads = {
+                (pull["head"]["ref"], (pull["head"].get("repo") or {}).get("id")): pull[
+                    "head"
+                ]["sha"]
+                for page in pull_pages
+                for pull in page
+            }
             pages = json.loads(
                 _gh(
                     "api",
@@ -656,45 +693,68 @@ def scan(fleet: list[str], previous_body: str = "") -> list[RepoStatus]:
                 (run.get("head_repository") or {}).get("id"),
             )
             groups.setdefault(key, []).append(run)
-        for history in groups.values():
+        for (_, branch, repository_id), history in groups.items():
             history.sort(key=lambda r: r.get("created_at", ""), reverse=True)
-            latest = next(
-                (
-                    r
-                    for r in history
-                    if r.get("conclusion") not in (None, "", "cancelled", "skipped")
-                ),
-                None,
-            )
-            if latest is None:
-                continue
+            latest = history[0]
             failures = [r for r in history if r.get("conclusion") in RED_CONCLUSIONS]
-            recovered = latest.get("conclusion") == "success" and bool(failures)
+            if not failures and not any(
+                r.get("conclusion") == "action_required" for r in history
+            ):
+                continue
+            if latest.get("conclusion") in (None, "", "cancelled", "skipped"):
+                latest = next(
+                    (
+                        r
+                        for r in history
+                        if r.get("head_sha") == latest.get("head_sha")
+                        and r.get("conclusion") == "success"
+                    ),
+                    latest,
+                )
+            head = heads.get((branch, repository_id))
+            default = branch == metadata["default_branch"] and repository_id in (
+                None,
+                metadata["id"],
+            )
+            historical = not default and head is None
+            stale = head is not None and latest.get("head_sha") != head
+            pending = not historical and (
+                stale or latest.get("conclusion") in (None, "", "cancelled", "skipped")
+            )
+            recovered = (
+                not (historical or pending)
+                and latest.get("conclusion") == "success"
+                and bool(failures)
+            )
             approval = latest.get("conclusion") == "action_required"
             if (
                 not recovered
+                and not pending
                 and not approval
                 and latest.get("conclusion") not in RED_CONCLUSIONS
             ):
                 continue
-            run_id = int(latest["id"])
+            run_id = 0 if stale else int(latest["id"])
+            inspect_failure = not (recovered or approval or historical or pending)
             references = latest.get("referenced_workflows") or []
             red.append(
                 RepoStatus(
                     repo=repo,
                     branch=str(latest.get("head_branch", "")),
-                    conclusion=str(latest["conclusion"]),
+                    conclusion="pending"
+                    if stale
+                    else str(latest.get("conclusion") or "pending"),
                     run_id=run_id,
-                    run_url=str(latest.get("html_url", "")),
+                    run_url="" if stale else str(latest.get("html_url", "")),
                     workflow=str(latest.get("name", "workflow")),
                     workflow_revision=", ".join(r.get("sha", "") for r in references),
                     recovered=recovered,
+                    historical=historical,
+                    pending=pending,
                     failed_steps=[]
-                    if recovered or approval
+                    if not inspect_failure
                     else failed_steps(repo, run_id),
-                    excerpt=[]
-                    if recovered or approval
-                    else error_excerpt(repo, run_id),
+                    excerpt=[] if not inspect_failure else error_excerpt(repo, run_id),
                     uses_canon_ci=any(
                         CANON_CI_REF in r.get("path", "") for r in references
                     ),
@@ -771,10 +831,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     statuses = scan(fleet, previous)
 
-    if not statuses:
+    if not any(not (s.recovered or s.historical) for s in statuses):
         if args.dry_run:
-            print("Fleet green.")  # noqa: T201
+            print("No active fleet failures.")  # noqa: T201
         elif number is not None:
+            if statuses:
+                _gh(
+                    "issue",
+                    "edit",
+                    str(number),
+                    "--repo",
+                    args.issue_repo,
+                    "--body",
+                    render_issue(statuses, today),
+                )
             _gh(
                 "issue",
                 "close",
@@ -782,7 +852,8 @@ def main(argv: list[str] | None = None) -> int:
                 "--repo",
                 args.issue_repo,
                 "--comment",
-                f"Fleet is green as of {today}.",
+                f"No active fleet failures as of {today}; "
+                "historical failures are not counted as recoveries.",
             )
         return 0
 
