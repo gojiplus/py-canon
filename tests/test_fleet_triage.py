@@ -549,3 +549,24 @@ def test_skipped_rerun_keeps_success_on_same_head(scan_history):
     )
     assert status.recovered
     assert not status.pending
+
+
+def test_dependabot_ecosystems_cannot_recover_each_other(scan_history):
+    uv = workflow_run(branch="main")
+    uv["name"] = "uv in /. - Update #123"
+    actions = workflow_run(2, "main", "old", "success")
+    actions["name"] = "github_actions in /. - Update #124"
+    (status,) = scan_history([uv, actions])
+    assert status.workflow == uv["name"]
+    assert status.conclusion == "failure"
+    assert not status.recovered
+
+
+def test_later_update_of_same_ecosystem_can_recover(scan_history):
+    old = workflow_run(branch="main")
+    old["name"] = "uv in /. - Update #123"
+    new = workflow_run(2, "main", "new", "success")
+    new["name"] = "uv in /. - Update #124"
+    (status,) = scan_history([old, new])
+    assert status.recovered
+    assert status.run_id == 2
