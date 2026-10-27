@@ -689,11 +689,12 @@ def scan(fleet: list[str], previous_body: str = "") -> list[RepoStatus]:
         for run in runs:
             key = (
                 run.get("workflow_id"),
+                re.sub(r" - Update #\d+$", "", run.get("name", "")),
                 run.get("head_branch"),
                 (run.get("head_repository") or {}).get("id"),
             )
             groups.setdefault(key, []).append(run)
-        for (_, branch, repository_id), history in groups.items():
+        for (_, _, branch, repository_id), history in groups.items():
             history.sort(key=lambda r: r.get("created_at", ""), reverse=True)
             latest = history[0]
             failures = [r for r in history if r.get("conclusion") in RED_CONCLUSIONS]
