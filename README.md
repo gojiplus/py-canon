@@ -1,4 +1,4 @@
-# py-canon
+# py canon: one shared standard for Python packages
 
 One versioned standard for the fleet's Python packages, plus the machinery
 that keeps ~50 repos on it without copy-paste.
