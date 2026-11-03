@@ -222,6 +222,16 @@ only installation and installed-package tests are skipped. This is an explicit
 exception for data corpora and similar projects, not a way to bypass a failing
 package build.
 
+The clean wheel environment resolves the declared test dependencies afresh;
+the source test matrix uses the lock. When only wheel tests fail, compare
+installed versions and the pytest configuration actually loaded. For example,
+statqa PR 51 and understudy PR 115 encountered pytest-asyncio's warning about an
+unset fixture loop scope in the wheel job. The workflow retained their config;
+the newly resolved plugin exposed a missing setting. Choose loop scopes from
+the project's fixture lifetimes, following
+[pytest-asyncio's configuration reference](https://pytest-asyncio.readthedocs.io/en/stable/reference/configuration.html),
+rather than suppressing the warning or assuming config was lost.
+
 Jobs outside the test matrix (lint, wheel validation, docs, the release build
 and its tests) run on the package's declared floor: the lowest minor version
 that `requires-python` allows, intersected with any dependency group's own
@@ -240,6 +250,14 @@ Workflow hygiene baked into the shims/reusables: top-level
   copybutton. Configuration comes from `py_canon.sphinx.configure()` — a repo's
   `docs/conf.py` is ~2 lines.
 - Version and metadata are read from `pyproject.toml`; never hardcoded.
+- When docs need a newer Python than the package, declare that floor in
+  `[tool.uv.dependency-groups]`, for example
+  `docs = { requires-python = ">=3.12" }`, and refresh the lock. A marker on
+  `py-canon` alone can omit it on Python 3.11 even though `docs/conf.py` imports
+  it unconditionally. This broke [museclient PR 3](https://github.com/gojiplus/museclient/pull/3);
+  [PR 4](https://github.com/gojiplus/museclient/pull/4) repaired the group floor
+  and passed the HTML build with warnings as errors, CI, and Pages deployment.
+  See [uv's group Python constraints](https://docs.astral.sh/uv/concepts/projects/dependencies/#group-requires-python).
 - Docstrings: **google style** on all public callables, enforced by ruff `D`
   + pydoclint.
 - **Content, not just configuration.** A docs site that is a title and one
@@ -285,6 +303,14 @@ Workflow hygiene baked into the shims/reusables: top-level
   merge line never executes. The rulesets require status checks, not reviews,
   so the approval bought nothing. GitHub's documented example does not approve
   either. Do not add it back.
+- **A CI retry can finish an armed auto-merge.** Complete local validation and
+  review before retrying the failing gate. Verify the resulting merge commit's
+  own CI: a `GITHUB_TOKEN` merge does not trigger ordinary push workflows, and
+  a sweep's dispatch step does not necessarily cover a PR that merges later.
+  This occurred on [preen PR 116](https://github.com/gojiplus/preen/pull/116);
+  dispatching the existing `ci.yml` verified the merged commit separately.
+  Docs/deployment workflows need their own trigger and evidence; absent runs
+  are unverified. Do not trigger publishing to obtain a check.
 - **Pages concurrency is keyed on the ref.** A constant `group: pages` on a
   workflow that also triggers on `pull_request` is a trap: GitHub cancels the
   pending run in a group when a new one queues, so a burst of Dependabot PRs
