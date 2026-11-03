@@ -89,6 +89,14 @@ require successful candidate CI before exposing a revision to consumers.
   because `pydoclint` and `docstring-parser` dependencies used by application
   packages can otherwise install conflicting `docstring_parser` modules.
 - **pytest + coverage**; a coverage floor is set per repo (template question).
+  - **Measure the package, including unimported modules.** Configure
+    `[tool.coverage.run].source` for the package directories, as the template
+    does with `source = ["src"]`. Keep tests outside that source. A bare
+    `pytest --cov` without source configuration can count test code and miss
+    unimported package modules: ethnicolr2 reported 93% that way while its
+    package-only run reported 73%. Check the report's file list before trusting
+    its percentage. Preserve the configured floor when correcting the scope;
+    add meaningful tests for the uncovered behavior.
   - **Configured strictly** (sp-repo-review PP301-PP309): `minversion`,
     `testpaths`, `log_level`, `xfail_strict`, `filterwarnings = ["error"]`, and
     `-ra`, `--strict-config`, `--strict-markers` in `addopts`. Each of these
