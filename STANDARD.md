@@ -76,7 +76,9 @@ require successful candidate CI before exposing a revision to consumers.
     and shell files outside data and fixture directories. Each repo also sets
     `builtin = "clear,rare,en-GB_to_en-US"` under `[tool.codespell]`, and marks
     names it does not own (an upstream API's `cancelled`, a quoted title) with
-    `# codespell:ignore` or `ignore-regex` rather than changing them.
+    `# codespell:ignore` or `ignore-regex` rather than changing them. Every
+    misspelling is critical, in any file: it fails `preen check --strict` and
+    blocks `preen release`.
   Framework-specific sets (`PD`, `NPY`, `ASYNC`, `DJ`, …) are deliberately
   left to individual repos; `preen adopt` preserves a repo's own
   `extend-select` rather than overwriting it.

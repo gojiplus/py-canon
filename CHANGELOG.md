@@ -9,6 +9,13 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Changed
+
+- US English is a critical requirement: a misspelling in any checked file
+  fails `preen check --strict` and blocks `preen release`. This needs the
+  preen release that follows 0.8.0; `reusable-ci.yml` still pins 0.8.0, which
+  lets misspellings in TOML, YAML, config and shell files through.
+
 ### Removed
 
 - `reusable-release`'s `publish` job and its `publish-pypi` / `testpypi`
