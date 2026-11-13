@@ -12,9 +12,9 @@ not a release of its own.
 ### Changed
 
 - US English is a critical requirement: a misspelling in any checked file
-  fails `preen check --strict` and blocks `preen release`. This needs the
-  preen release that follows 0.8.0; `reusable-ci.yml` still pins 0.8.0, which
-  lets misspellings in TOML, YAML, config and shell files through.
+  fails `preen check --strict` and blocks `preen release`. `reusable-ci.yml`
+  pins preen 0.9.0, which enforces it; 0.8.0 let misspellings in TOML, YAML,
+  config and shell files through, and passed misspelled file names.
 
 ### Removed
 
