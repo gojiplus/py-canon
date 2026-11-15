@@ -38,6 +38,15 @@ on:
         required: false
         type: number
         default: 12
+    secrets:
+      DEPENDABOT_REBASE_TOKEN:
+        description: >
+          A token of a user with push access, used only to post
+          `@dependabot rebase`. Dependabot refuses commands from
+          github-actions[bot] and from GitHub Apps ("only users with push
+          access can use that command"), so GITHUB_TOKEN cannot do this.
+          Without it the sweep labels and reports stale PRs instead.
+        required: false
 
 # The sweep inherits the caller's token permissions. Callers grant contents and
 # pull-requests write, plus checks and statuses read. Inheritance lets callers
@@ -251,6 +260,25 @@ jobs:
           done < ruleset-ids.txt | sort -u > required.txt
           echo "required contexts: $(tr '\n' ' ' < required.txt)"
 
+          # The default branch's head commit and its CI runs, so the plan can
+          # tell a failure that predates a fix on main from a live one.
+          # Dependabot rebases only on conflict. Measured on 2026-11-14: 16 of
+          # 34 open fleet PRs failed nothing but a vulnerability audit that
+          # their base branches had already fixed, with nothing to re-run them.
+          gh api "repos/${GH_REPO}" --jq .default_branch > base-branch.txt
+          gh api "repos/${GH_REPO}/commits/$(cat base-branch.txt)" > base-head.json
+          sha=$(python3 -c 'import json; print(json.load(open("base-head.json"))["sha"])')
+          # Best-effort: a caller that withholds actions: read gets this refused,
+          # and the sweep then behaves exactly as it did before this lookup.
+          if ! gh api "repos/${GH_REPO}/actions/runs?head_sha=${sha}&per_page=100" \
+              > base-runs.json 2> base-runs-error.txt; then
+            cat base-runs-error.txt >&2
+            echo "::warning::could not list CI runs on $(cat base-branch.txt); \
+          failures that predate a fix there will not be detected. Grant the \
+          caller actions: read."
+            echo '{"workflow_runs": [], "unavailable": true}' > base-runs.json
+          fi
+
       # Decide per PR, print one line for every one of them, and act. Check
       # state is read from statusCheckRollup rather than from mergeStateStatus
       # alone: CLEAN is GitHub's opinion about mergeability, and this job needs
@@ -266,18 +294,48 @@ jobs:
           stale_after = dt.timedelta(hours=float(os.environ["STALE_AFTER_HOURS"]))
           now = dt.datetime.now(dt.UTC)
 
+          def when(stamp):
+              return dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+
+          def result_of(check):
+              if "state" in check:
+                  return (check.get("state") or "PENDING").upper()
+              if check.get("status") != "COMPLETED":
+                  return "PENDING"
+              return (check.get("conclusion") or "PENDING").upper()
+
+          def is_failure(result):
+              return result not in TERMINAL_OK | {"PENDING", "EXPECTED"}
+
           def check_results(pr):
               results = {}
               for check in pr.get("statusCheckRollup") or []:
                   name = check.get("name") or check.get("context") or "unnamed check"
-                  if "state" in check:
-                      result = check.get("state") or "PENDING"
-                  elif check.get("status") != "COMPLETED":
-                      result = "PENDING"
-                  else:
-                      result = check.get("conclusion") or "PENDING"
-                  results.setdefault(name, []).append(result.upper())
+                  results.setdefault(name, []).append(result_of(check))
               return results
+
+          def predates_green_base(pr):
+              # True when every failing check finished before the base branch's
+              # head commit existed, and that commit's CI is green: the PR was
+              # never tested against the fix, so its red is evidence of nothing.
+              # A rebase that still fails has newer checks and stops qualifying,
+              # so this cannot ask twice for the same base commit.
+              if not base_green:
+                  return False
+              finished = [check.get("completedAt") or check.get("startedAt")
+                          for check in pr.get("statusCheckRollup") or []
+                          if is_failure(result_of(check))]
+              return bool(finished) and all(
+                  stamp and when(stamp) < base_since for stamp in finished)
+
+          base_branch = open("base-branch.txt").read().strip()
+          base_head = json.load(open("base-head.json"))
+          base_since = when(base_head["commit"]["committer"]["date"])
+          ci_runs = [run for run in json.load(open("base-runs.json"))["workflow_runs"]
+                     if run.get("path") == ".github/workflows/ci.yml"]
+          latest = max(ci_runs, key=lambda run: run["created_at"], default=None)
+          base_green = bool(latest) and latest.get("status") == "completed" \
+              and latest.get("conclusion") == "success"
 
           required = {line.strip() for line in open("required.txt") if line.strip()}
           summary = ["## Dependabot recovery", "", "| PR | Action | Status |",
@@ -288,8 +346,7 @@ jobs:
               results = check_results(pr)
               missing = sorted(required - results.keys())
               failed = sorted(name for name, states in results.items()
-                              if any(state not in TERMINAL_OK | {"PENDING", "EXPECTED"}
-                                     for state in states))
+                              if any(is_failure(state) for state in states))
               running = sorted(name for name, states in results.items()
                                if any(state in {"PENDING", "EXPECTED"} for state in states))
               blockers = []
@@ -302,8 +359,15 @@ jobs:
               if not results:
                   blockers.append("no checks reported")
               armed = bool(pr.get("autoMergeRequest"))
+              labeled = int(any(label.get("name") == "needs-rebase"
+                                for label in pr.get("labels") or []))
               if blockers:
                   verdict, act = "; ".join(blockers), "none"
+                  if (failed and pr["mergeStateStatus"] not in {"DIRTY", "DRAFT"}
+                          and predates_green_base(pr)):
+                      act = "rebase"
+                      verdict += (f"; every failure predates green {base_branch} "
+                                  f"{base_head['sha'][:7]}")
               elif running:
                   verdict = "checks running: " + ", ".join(running)
                   act = "arm" if required and not armed else "none"
@@ -313,14 +377,15 @@ jobs:
               if armed:
                   verdict += "; auto-merge enabled"
               stale = act == "none" and age > stale_after
-              print(f"{n}\t{act}\t{verdict}\t{int(age.total_seconds()//3600)}h\t{int(stale)}")
+              print(f"{n}\t{act}\t{verdict}\t{int(age.total_seconds()//3600)}h"
+                    f"\t{int(stale)}\t{labeled}")
               safe_verdict = verdict.replace("|", "\\|").replace("\n", " ")
               summary.append(f"| [#{n}]({pr['url']}) | {act} | {safe_verdict} |")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as report:
               report.write("\n".join(summary) + "\n")
           PY
           printf '%-6s %-6s %-32s %6s\n' "PR" "ACTION" "VERDICT" "AGE"
-          while IFS=$'\t' read -r n act verdict age stale; do
+          while IFS=$'\t' read -r n act verdict age stale _labeled; do
             printf '%-6s %-6s %-32s %6s\n' "#$n" "$act" "$verdict" "$age"
             if [ "$stale" = "1" ]; then
               echo "::warning::PR #$n remains open after ${age}: ${verdict}"
@@ -331,6 +396,7 @@ jobs:
         id: arm
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REBASE_TOKEN: ${{ secrets.DEPENDABOT_REBASE_TOKEN }}
         run: |
           # Same rule as the classify job: a declined merge is reported, never
           # raised. These were already non-fatal; what they lacked was a reason.
@@ -346,10 +412,49 @@ jobs:
                 echo "::error::could not $3 #$1: $2"; return 1 ;;
             esac
           }
+          # The label is the record that this base commit has already been
+          # asked about, so a sweep every three hours asks Dependabot once,
+          # not eight times a day. Label calls warn rather than fail: the
+          # warning below is the signal, and a sweep that dies over a label
+          # would stop merging.
+          labelled_once=0
+          flag() {
+            if [ "$labelled_once" = 0 ]; then
+              gh label create needs-rebase --force --color FBCA04 \
+                --description "Failed only before the base branch went green" \
+                >/dev/null 2>&1 || echo "::warning::could not create the needs-rebase label"
+              labelled_once=1
+            fi
+            gh pr edit "$1" --add-label needs-rebase >/dev/null 2>&1 \
+              || echo "::warning::could not label #$1 needs-rebase"
+          }
           acted=0
           merged=0
-          while IFS=$'\t' read -r n act _rest; do
+          while IFS=$'\t' read -r n act _verdict _age _stale labeled; do
+            if [ "$labeled" = 1 ] && [ "$act" != rebase ]; then
+              gh pr edit "$n" --remove-label needs-rebase >/dev/null 2>&1 \
+                || echo "::warning::could not remove needs-rebase from #$n"
+            fi
             case "$act" in
+              rebase)
+                if [ "$labeled" = 1 ]; then
+                  echo "#$n was already flagged for this base; waiting on Dependabot"
+                elif [ -n "${REBASE_TOKEN:-}" ]; then
+                  if GH_TOKEN="$REBASE_TOKEN" gh pr comment "$n" --body "@dependabot rebase" >/dev/null 2>&1; then
+                    echo "asked Dependabot to rebase #$n"
+                    flag "$n"
+                  else
+                    echo "::warning::could not ask Dependabot to rebase #$n; check DEPENDABOT_REBASE_TOKEN"
+                  fi
+                else
+                  flag "$n"
+                fi
+                if [ -z "${REBASE_TOKEN:-}" ]; then
+                  echo "::warning::#$n failed only before $(cat base-branch.txt) went green. \
+          Comment '@dependabot rebase' on it as a maintainer: Dependabot ignores \
+          github-actions[bot]. Passing DEPENDABOT_REBASE_TOKEN automates this."
+                fi
+                acted=$((acted + 1)) ;;
               arm)
                 echo "arming #$n"
                 out=$(gh pr merge "$n" --auto --squash 2>&1) || explain "$n" "$out" arm
@@ -383,17 +488,37 @@ jobs:
       # is best-effort: a repo whose ci.yml predates the `workflow_dispatch`
       # trigger simply cannot be dispatched, and saying so is more useful than
       # failing the sweep over it.
-      - name: Run CI on the branch we just merged into
-        if: steps.arm.outputs.merged != '0' && steps.arm.outputs.merged != ''
+      #
+      # Merges this sweep makes are not the only ones. Where a ruleset exists,
+      # the classify job arms auto-merge and GitHub performs the merge as
+      # github-actions[bot], which triggers nothing either: recite/softverse
+      # main sat at `bump soupsieve (#58)`, merged that way on 2026-11-13, with
+      # no CI run for days. So also dispatch when the default branch's head has
+      # never been tested -- which is the evidence the stale-failure check above
+      # needs before it will ask Dependabot to rebase anything.
+      #
+      # The branch name comes from the API: on a scheduled run the event
+      # payload carries no repository object to read it from.
+      - name: Run CI on the default branch if nothing else has
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          MERGED: ${{ steps.arm.outputs.merged }}
         run: |
-          if out=$(gh workflow run ci.yml --ref "$DEFAULT_BRANCH" 2>&1); then
-            echo "dispatched CI on $DEFAULT_BRANCH"
+          branch=$(cat base-branch.txt)
+          untested=$(python3 -c 'import json
+          runs = json.load(open("base-runs.json"))
+          print(int(not runs.get("unavailable") and not any(
+              run.get("path") == ".github/workflows/ci.yml" for run in runs["workflow_runs"])))')
+          if [ "${MERGED:-0}" = 0 ] && [ "$untested" = 0 ]; then
+            echo "$branch already has CI on its head commit"
+            exit 0
+          fi
+          if out=$(gh workflow run ci.yml --ref "$branch" 2>&1); then
+            echo "dispatched CI on $branch"
           else
             printf '%s\n' "$out"
-            echo "::warning::could not dispatch CI on ${DEFAULT_BRANCH}; the \
-            merge commit will have no CI run of its own. If ci.yml has no \
-            workflow_dispatch trigger, re-run 'preen adopt' to pick it up."
+            echo "::warning::could not dispatch CI on ${branch}; its head commit \
+            will have no CI run of its own. If ci.yml has no workflow_dispatch \
+            trigger, re-run 'preen adopt' to pick it up; a 403 means the caller \
+            must grant actions: write."
           fi

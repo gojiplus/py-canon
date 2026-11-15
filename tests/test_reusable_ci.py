@@ -273,8 +273,7 @@ def test_auto_merge_dispatches_ci_on_the_branch_it_merged_into() -> None:
     """
     workflow = AUTO_MERGE.read_text()
     assert "gh workflow run ci.yml --ref" in workflow
-    # Only when something actually landed: a declined merge must not dispatch.
-    assert "steps.arm.outputs.merged != '0'" in workflow
+    # When to dispatch is exercised by test_default_branch_ci_dispatch.
     # And a repo whose ci.yml predates the trigger warns rather than failing.
     assert "could not dispatch CI" in workflow
 

@@ -319,6 +319,12 @@ Workflow hygiene baked into the shims/reusables: top-level
   a sweep's dispatch step does not necessarily cover a PR that merges later.
   This occurred on [preen PR 116](https://github.com/gojiplus/preen/pull/116);
   dispatching the existing `ci.yml` verified the merged commit separately.
+- **A red Dependabot PR may only be out of date.** Dependabot rebases on
+  conflict, never because the base was fixed. The sweep labels a PR
+  `needs-rebase` when every failure predates the base's green head commit.
+  Comment `@dependabot rebase` as a maintainer: Dependabot ignores
+  github-actions[bot] and GitHub Apps. Pass `DEPENDABOT_REBASE_TOKEN`
+  to the shared workflow to automate this.
   Docs/deployment workflows need their own trigger and evidence; absent runs
   are unverified. Do not trigger publishing to obtain a check.
 - **Pages concurrency is keyed on the ref.** A constant `group: pages` on a
