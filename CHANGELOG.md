@@ -11,6 +11,19 @@ not a release of its own.
 
 ### Changed
 
+- The Dependabot sweep finds PRs whose only failures predate a green default
+  branch: every failing check finished before the base's head commit existed,
+  and that commit's CI passed. Dependabot rebases only on conflict, so these
+  sat red indefinitely: on 2026-11-14, 16 of 34 open fleet PRs failed nothing
+  but a vulnerability audit their bases had already fixed. The sweep labels
+  them `needs-rebase` and warns. Dependabot refuses commands from
+  github-actions[bot], so it posts `@dependabot rebase` only when the caller
+  passes a `DEPENDABOT_REBASE_TOKEN` belonging to a user with push access.
+- The sweep dispatches `ci.yml` whenever the default branch's head has no CI
+  run, not only after merges it made itself. Auto-merges GitHub performs for
+  the classify job run as github-actions[bot] and trigger nothing; untested
+  heads also left the stale-failure check above without evidence. The branch
+  now comes from the API rather than the event payload.
 - US English is a critical requirement: a misspelling in any checked file
   fails `preen check --strict` and blocks `preen release`. `reusable-ci.yml`
   pins preen 0.9.0, which enforces it; 0.8.0 let misspellings in TOML, YAML,
