@@ -346,6 +346,22 @@ Workflow hygiene baked into the shims/reusables: top-level
   CONTRIBUTING.md, issue templates).
 - Repo metadata (description, topics, homepage → docs URL) is set at adoption.
 
+## Links
+
+Links are checked in two halves, both by [lychee](https://lychee.cli.rs):
+
+- **Within the repo, on every commit and in CI's lint job:** lychee's
+  pre-commit hook, offline, over Markdown, reST and HTML. It catches a renamed
+  file, a moved image and a stale `#anchor` in milliseconds and never fails
+  because someone else's server is down.
+- **Web links, weekly and on push:** `link-check.yml`, which calls the shared
+  workflow in `gojiplus/.github`. External links rot without anyone
+  committing, so a finished package would otherwise never find out.
+
+A URL that is alive but fails a bare GET, such as an API base that needs a
+path, goes under `exclude` in `lychee.toml` at the repo root. lychee reads that
+file by itself, so preen, the hook and the workflow share one list.
+
 ## Conformance
 
 `preen check --strict` runs in CI (part of the lint job) and fails a repo that
