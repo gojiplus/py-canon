@@ -16,7 +16,8 @@ not a release of its own.
   `reusable-ci.yml`'s lint job runs that same hook; a repo whose config lacks
   it gets a notice, not a failure. A new `link-check.yml` checks web links
   weekly through the shared workflow in gojiplus/.github. A repo's exclusions
-  go in `lychee.toml`, which lychee reads by itself.
+  go in `lychee.toml`, which lychee reads by itself. zizmor allows
+  `gojiplus/.github` at a moving tag, as it does py-canon.
 
 ### Changed
 
