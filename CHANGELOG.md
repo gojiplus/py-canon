@@ -18,6 +18,8 @@ not a release of its own.
   weekly through the shared workflow in gojiplus/.github. A repo's exclusions
   go in `lychee.toml`, which lychee reads by itself. zizmor allows
   `gojiplus/.github` at a moving tag, as it does py-canon.
+  The hook is pinned to the upstream commit that makes it work from a linked
+  git worktree (lycheeverse/lychee#2292) until a lychee release carries it.
 
 ### Changed
 
