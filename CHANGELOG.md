@@ -9,7 +9,20 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Added
+
+- Link checking in two halves, both lychee. The template's pre-commit config
+  gains lychee's hook, offline, for links within the repo, and
+  `reusable-ci.yml`'s lint job runs that same hook; a repo whose config lacks
+  it gets a notice, not a failure. A new `link-check.yml` checks web links
+  weekly through the shared workflow in gojiplus/.github. A repo's exclusions
+  go in `lychee.toml`, which lychee reads by itself. zizmor allows
+  `gojiplus/.github` at a moving tag, as it does py-canon.
+
 ### Changed
+
+- py-canon's own link exclusions moved from `[tool.preen] link_ignore` to
+  `lychee.toml`.
 
 - The Dependabot sweep finds PRs whose only failures predate a green default
   branch: every failing check finished before the base's head commit existed,

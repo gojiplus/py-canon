@@ -601,3 +601,31 @@ def test_auto_merge_inherits_the_callers_check_read_permissions():
         assert permissions["actions"] == "write"
         assert permissions["checks"] == "read"
         assert permissions["statuses"] == "read"
+
+
+def test_lint_runs_the_lychee_hook_from_the_repo_config() -> None:
+    """CI checks links within the repo with the hook a local commit runs.
+
+    Running lychee here with its own arguments would let CI and pre-commit
+    disagree about the same tree. A repo without the hook gets a notice, not a
+    failure, because this workflow moves under every adopted repo at once.
+    """
+    workflow = yaml.safe_load(WORKFLOW.read_text())
+    steps = workflow["jobs"]["lint"]["steps"]
+    step = next(s for s in steps if s.get("name") == "Links within the repo")
+    assert "pre-commit run lychee --all-files" in step["run"]
+    assert re.search(r"pre-commit==\d+\.\d+\.\d+", step["run"])
+    assert "::notice::" in step["run"]
+
+
+def test_template_and_repo_share_the_lychee_hook() -> None:
+    """The offline hook ships in the template and py-canon dogfoods it."""
+    root = Path(__file__).parents[1]
+    for config in (
+        root / ".pre-commit-config.yaml",
+        root / "template/.pre-commit-config.yaml",
+    ):
+        repos = yaml.safe_load(config.read_text())["repos"]
+        hooks = [h for r in repos for h in r.get("hooks", []) if h["id"] == "lychee"]
+        assert len(hooks) == 1, config
+        assert "--offline" in hooks[0]["args"]

@@ -31,3 +31,13 @@ repos:
       - id: check-toml
       - id: check-added-large-files
       - id: check-merge-conflict
+  # Links within the repo, offline: relative paths, images and #anchors.
+  # Web links are the weekly link-check workflow's job; a commit hook that
+  # waits on the network fails for reasons that have nothing to do with the
+  # commit. Exclusions live in lychee.toml, which lychee reads by itself.
+  - repo: https://github.com/lycheeverse/lychee
+    rev: lychee-v0.24.2
+    hooks:
+      - id: lychee
+        args: [--offline, --include-fragments, --no-progress]
+        types_or: [markdown, rst, html]

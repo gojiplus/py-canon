@@ -4,4 +4,6 @@ rules:
       policies:
         "gojiplus/py-canon": ref-pin
         "gojiplus/py-canon/*": ref-pin
+        # The fleet-wide reusable workflows (link check), consumed via @v1 too.
+        "gojiplus/.github/*": ref-pin
         "*": hash-pin

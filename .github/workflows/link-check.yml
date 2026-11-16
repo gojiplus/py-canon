@@ -1,0 +1,24 @@
+name: Link check
+
+# Web links, weekly and on push. Links within the repo are checked offline on
+# every commit by the lychee pre-commit hook, and in CI's lint job.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    uses: gojiplus/.github/.github/workflows/reusable-link-check.yml@v1
+    with:
+      paths: |
+        README.md
+        CHANGELOG.md
+        docs/**/*.md
+        docs/**/*.rst

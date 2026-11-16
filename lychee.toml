@@ -1,0 +1,17 @@
+# URLs the link checks should not fetch. lychee reads this file by itself, so
+# preen's `links` check, the pre-commit hook and the weekly link check share it.
+# Patterns carry no scheme on purpose: preen before 0.10 scans .toml files, and
+# a pattern with a scheme would come back out as a URL to fetch.
+exclude = [
+    # These release links become valid only after the v1.0.1 tag is pushed.
+    'github\.com/gojiplus/py-canon/compare/v1\.0\.1\.\.\.HEAD',
+    'github\.com/gojiplus/py-canon/compare/v1\.0\.0\.\.\.v1\.0\.1',
+    # An intentional 404 used to test fleet-health error classification.
+    'dataverse\.harvard\.edu/api/access/datafile/1',
+    # Alive, but not from a GitHub runner. Both pages answer 200 from a
+    # workstation and neither has changed; from Actions egress the request
+    # hangs until lychee gives up, and *which* of the three URLs on this host
+    # fails varies run to run -- the lint job went from 29s to 2m28s doing it.
+    # A host the docs cite correctly must not gate every PR in the repo.
+    'scientific-python\.org/',
+]

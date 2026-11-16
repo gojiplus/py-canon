@@ -184,6 +184,17 @@ jobs:
           fi
           echo "pydoclint: flat layout, checking $pkg/"
           uvx --from pydoclint==0.9.1 pydoclint "$pkg"
+      - name: Links within the repo
+        # The same hook, arguments and file selection as a local commit, so CI
+        # cannot pass what pre-commit rejects or the reverse. A repo whose
+        # pre-commit config predates the hook is told so rather than failed:
+        # this workflow moves on @v1 under every adopted repo at once.
+        run: |
+          if grep -qE '^[[:space:]]*-[[:space:]]*id:[[:space:]]*lychee[[:space:]]*$' .pre-commit-config.yaml 2>/dev/null; then
+            uvx --from pre-commit==4.7.0 pre-commit run lychee --all-files --show-diff-on-failure
+          else
+            echo "::notice::No lychee hook in .pre-commit-config.yaml, so links within the repo were not checked. Take the hook from py-canon's template."
+          fi
       - name: Preen conformance
         if: inputs.run-preen
         # --skip tests: the test job below already runs the suite, across the
