@@ -254,7 +254,7 @@ def test_preen_version_is_pinned() -> None:
     assert invocations, "no workflow runs Preen"
     for name, call in invocations:
         assert "--python 3.12" in call, f"{name}: {call}"
-        assert re.search(r"--from preen==0\.9\.0\s", call), f"{name}: {call}"
+        assert re.search(r"--from preen==0\.10\.0\s", call), f"{name}: {call}"
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow
 
 
