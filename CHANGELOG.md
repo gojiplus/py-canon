@@ -23,6 +23,10 @@ not a release of its own.
 
 ### Changed
 
+- `reusable-ci.yml` pins preen 0.10.0, whose `links` check reads exclusions
+  from `lychee.toml` and fails a repo that still sets `[tool.preen]
+  link_ignore`. Every fleet repo that set it has moved.
+
 - py-canon's own link exclusions moved from `[tool.preen] link_ignore` to
   `lychee.toml`.
 

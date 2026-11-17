@@ -235,7 +235,7 @@ def _preen_invocations(command: str) -> list[str]:
 def test_preen_version_is_pinned() -> None:
     """A Preen release must not change every caller's CI without review."""
     workflow = WORKFLOW.read_text()
-    pinned = "uvx --python 3.12 --from preen==0.9.0 preen check --strict --skip tests"
+    pinned = "uvx --python 3.12 --from preen==0.10.0 preen check --strict --skip tests"
     assert pinned in workflow
     assert "run: uvx preen check" not in workflow
     # Every workflow, the template smoke job included, must run the same Preen
