@@ -57,6 +57,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # preen's removed-tests compares the test inventory with the merge
+          # base and reads Removed-test: trailers from the branch's commits.
+          # A depth-1 clone has neither, and the check passes with a note.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Use the package's minimum Python
         # uv uses the runner's own Python (3.12) only when it satisfies
