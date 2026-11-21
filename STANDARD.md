@@ -107,6 +107,17 @@ require successful candidate CI before exposing a revision to consumers.
     the release that removes the API; without `--strict-markers` a typo in a
     marker name silently selects nothing; without `xfail_strict` a test that
     starts passing keeps reporting xfail. `preen fix pytest-config` writes them.
+  - **A deleted test is named in the commit that deletes it**, with a
+    `Removed-test: <node id or fnmatch pattern>` trailer. A rewrite deletes the
+    old implementation's tests along with it, and the property they pinned goes
+    untested while coverage stays the same, because other tests still run those
+    lines. preen's `removed-tests` compares the inventory with the merge base; a
+    body that reappears under a new name counts as a rename. The lint job
+    checks out full history so the base is there.
+  - **A skip never catches a failure.** No `except Exception:` (or bare
+    `except`, or `AssertionError`) whose handler skips: a failed `assert` is an
+    `Exception` and is reported as a skip. Catch the error that means
+    "unavailable", or use `pytest.importorskip`. preen's `skip-on-error`.
   Coverage is reported as a markdown table in the GitHub **job summary** of the
   run that produced it — `coverage report --format=markdown` into
   `$GITHUB_STEP_SUMMARY`, from `reusable-ci.yml`.

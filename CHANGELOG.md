@@ -11,6 +11,13 @@ not a release of its own.
 
 ### Added
 
+- Two test-integrity rules in the standard: a deleted test is named in a
+  `Removed-test:` commit trailer, and a skip never sits in a broad `except`.
+  preen's `removed-tests` and `skip-on-error` checks enforce them once the
+  preen pin moves to the release that ships them. The lint job now checks out
+  full history (`fetch-depth: 0`), which `removed-tests` needs to find the
+  merge base and the branch's trailers.
+
 - Link checking in two halves, both lychee. The template's pre-commit config
   gains lychee's hook, offline, for links within the repo, and
   `reusable-ci.yml`'s lint job runs that same hook; a repo whose config lacks
