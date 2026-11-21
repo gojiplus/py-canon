@@ -9,6 +9,8 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-21
+
 ### Changed
 
 - The Python floor is 3.13: STANDARD.md, the template's `requires-python`
