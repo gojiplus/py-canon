@@ -209,7 +209,15 @@ jobs:
         # 15m15s while pytest was still going.
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: uvx --python 3.12 --from preen==0.11.0 preen check --strict --skip tests
+          # On a push there is no pull-request target, and the branch's
+          # upstream is the pushed commit itself, so removed-tests would
+          # compare the push with itself. The pre-push SHA is the base.
+          PREEN_BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          if [ "$PREEN_BASE_REF" = "0000000000000000000000000000000000000000" ]; then
+            unset PREEN_BASE_REF
+          fi
+          uvx --python 3.12 --from preen==0.11.0 preen check --strict --skip tests
 
   test:
     runs-on: ${{ matrix.os }}
@@ -446,19 +454,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Fetch the base branch lock
+        id: base-lock
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           if [ ! -f uv.lock ]; then
             echo "no uv.lock in this repo; nothing to compare"
+            echo "present=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "present=true" >> "$GITHUB_OUTPUT"
           git fetch --depth=1 origin "$BASE_SHA"
           # A repo that only gained a lock on this branch has no base to
           # regress from.
           git show "$BASE_SHA:uv.lock" > /tmp/base.lock 2>/dev/null || : > /tmp/base.lock
       - name: Compare locked versions against the base branch
+        if: steps.base-lock.outputs.present == 'true'
         # packaging, not string comparison: "3.0.5" must sort above "2.3.3"
         # and "1.1.411" above "1.1.39". uv.lock can hold one package several
         # times under different markers, so each side is reduced to its
