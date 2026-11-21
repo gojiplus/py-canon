@@ -9,7 +9,7 @@ not a release of its own.
 
 ## [Unreleased]
 
-## [1.4.0] - 2026-11-20
+## [1.4.0] - 2026-11-21
 
 ### Added
 
