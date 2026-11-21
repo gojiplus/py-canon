@@ -107,8 +107,9 @@ require successful candidate CI before exposing a revision to consumers.
     the release that removes the API; without `--strict-markers` a typo in a
     marker name silently selects nothing; without `xfail_strict` a test that
     starts passing keeps reporting xfail. `preen fix pytest-config` writes them.
-  - **A deleted test is named in the commit that deletes it**, with a
-    `Removed-test: <node id or fnmatch pattern>` trailer. A rewrite deletes the
+  - **A deleted test is named in a commit on the branch that deletes it**,
+    with a `Removed-test: <node id or pattern>` trailer (`*` and `?` are the
+    only wildcards). A rewrite deletes the
     old implementation's tests along with it, and the property they pinned goes
     untested while coverage stays the same, because other tests still run those
     lines. preen's `removed-tests` compares the inventory with the merge base; a

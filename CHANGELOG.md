@@ -9,12 +9,14 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-21
+
 ### Added
 
 - Two test-integrity rules in the standard: a deleted test is named in a
   `Removed-test:` commit trailer, and a skip never sits in a broad `except`.
-  preen's `removed-tests` and `skip-on-error` checks enforce them once the
-  preen pin moves to the release that ships them. The lint job now checks out
+  preen 0.11.0, now pinned, enforces them with its `removed-tests` and
+  `skip-on-error` checks. The lint job now checks out
   full history (`fetch-depth: 0`), which `removed-tests` needs to find the
   merge base and the branch's trailers.
 
@@ -96,6 +98,11 @@ not a release of its own.
 
 ### Fixed
 
+- On a push, the lint job gives preen the pre-push SHA as the base, so
+  `removed-tests` compares the push with what it replaced rather than with
+  itself.
+- The lock-regression job skips its comparison when the repo has no
+  `uv.lock`, instead of failing on the missing base file.
 - Added opt-in coverage before pytest plugin loading, with regression tests for
   import-time measurement, untouched modules, and test/coverage failures.
 
