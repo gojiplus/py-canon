@@ -101,13 +101,16 @@ jobs:
           # it shipped the deprecated `license = { text = "MIT" }` form and no
           # CHANGELOG, so every generated repo was born failing conformance.
           #
-          # Two checks are skipped because they fail on facts about *this
+          # Three checks are skipped because they fail on facts about *this
           # throwaway project*, not about the template. `links` 404s on
           # github.com/gojiplus/smoke-pkg, a repo that will never exist.
           # `template` reports drift because the project is generated from an
           # unreleased commit, so its recorded _commit is ahead of the latest
-          # tag. The other sixteen checks gate.
-          uvx --python 3.13 --from preen==0.11.0 preen check --strict --skip links --skip template
+          # tag. `ci-matrix` compares the project's floor with the matrix of
+          # the released @v1 its ci.yml calls, not this commit's, so a change
+          # that raises the floor and the default together fails it until the
+          # release moves v1. The other checks gate.
+          uvx --python 3.13 --from preen==0.11.0 preen check --strict --skip links --skip template --skip ci-matrix
           echo "template smoke test: full gate green"
 
   promote:
