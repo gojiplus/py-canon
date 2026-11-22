@@ -4,7 +4,7 @@ description = "{{ description }}"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "{{ author_name }}", email = "{{ author_email }}" }]
+authors = [{ name = "{{ author_name }}"{% if author_email %}, email = "{{ author_email }}"{% endif %} }]
 requires-python = ">=3.12"
 version = "0.1.0"
 classifiers = [
