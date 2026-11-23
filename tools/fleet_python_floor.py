@@ -68,6 +68,16 @@ PYPROJECT_EDITS = [
     ),
 ]
 MATRIX_RE = re.compile(r"(python-versions:\s*')(\[[^\]]*\])(')")
+# A single-Python pin elsewhere in a workflow (release.yml's
+# `uv sync --python 3.12`, setup-python's `python-version: "3.12"`) would
+# install a Python the new floor rejects, failing the next release.
+PIN_RES = [
+    re.compile(rf"(--python[ =])({re.escape(OLD)})\b"),
+    re.compile(rf"""(python-version:\s*["']?)({re.escape(OLD)})\b"""),
+]
+# py-canon's own floor moves last: while any fleet repo is still at OLD, a
+# py-canon requiring NEW cannot resolve in that repo's docs group.
+SKIP = {"gojiplus/py-canon"}
 
 
 def run(*args: str, cwd: pathlib.Path | None = None, check: bool = True) -> str:
@@ -106,7 +116,23 @@ def edit_matrix(path: pathlib.Path) -> bool:
     return True
 
 
+def edit_workflow_pins(workflows: pathlib.Path) -> bool:
+    """Move single-Python pins in every workflow from OLD to NEW."""
+    changed = False
+    for path in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
+        text = path.read_text()
+        new = text
+        for pattern in PIN_RES:
+            new = pattern.sub(rf"\g<1>{NEW}", new)
+        if new != text:
+            path.write_text(new)
+            changed = True
+    return changed
+
+
 def bump(repo: str, work: pathlib.Path, dry: bool) -> str:
+    if repo in SKIP:
+        return "skipped: moves after the fleet"
     if json.loads(
         run("gh", "pr", "list", "--repo", repo, "--head", BRANCH, "--json", "url")
     ):
@@ -116,6 +142,7 @@ def bump(repo: str, work: pathlib.Path, dry: bool) -> str:
     if not edit_pyproject(clone / "pyproject.toml"):
         return f"floor is not >={OLD}; nothing to do"
     edit_matrix(clone / ".github/workflows/ci.yml")
+    edit_workflow_pins(clone / ".github/workflows")
     run("uv", "lock", cwd=clone)
     # A higher ruff target switches on rules for syntax the old floor could
     # not use. UP040 (the `type` keyword for aliases) failed appeler/naampy's
