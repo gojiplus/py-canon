@@ -24,8 +24,9 @@ def test_ci_syncs_only_the_canonical_dev_group() -> None:
     assert unlocked in workflow
     assert frozen in release_workflow
     assert unlocked in release_workflow
-    # Three: the lint and test jobs' syncs, plus the wheel job's install.
-    assert workflow.count("test_group=(--group test)") == 3
+    # Four: the lint, test and lower-bounds jobs' syncs, plus the wheel job's
+    # install.
+    assert workflow.count("test_group=(--group test)") == 4
     assert release_workflow.count("test_group=(--group test)") == 1
     assert "--all-groups" not in workflow
     assert "--all-groups" not in release_workflow
@@ -435,6 +436,7 @@ def test_jobs_without_a_matrix_python_pin_the_package_floor() -> None:
     assert set(jobs) == {
         "reusable-ci/lint",
         "reusable-ci/wheel",
+        "reusable-ci/lower-bounds",
         "reusable-docs/build",
         "reusable-release/test",
         "reusable-release/build",

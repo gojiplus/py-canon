@@ -9,6 +9,20 @@ not a release of its own.
 
 ## [Unreleased]
 
+### Added
+
+- A `lower-bounds` job in the reusable CI: every direct dependency resolved to
+  the lowest version its constraint allows, on the floor Python, then the
+  suite. Declared floors that no resolver can install (stable-cart's
+  `numpy>=1.23.0`, fewlab's `pandas>=1.5` on Python 3.12) now fail CI instead
+  of failing users. Opt out with `run-lower-bounds: false`. projpred 3.0.0
+  added the same check for its R floor.
+- ruff's `NPY` rules in the template: no legacy global NumPy random state,
+  in tests too.
+- `tools/fleet_python_floor.py` also moves `uv python install X` and YAML
+  flow lists of versions, the two patterns that left uijudge-bench and rmcp
+  red in the 3.13 sweep.
+
 ## [1.5.0] - 2026-11-21
 
 ### Changed

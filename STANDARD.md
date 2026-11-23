@@ -56,7 +56,7 @@ require successful candidate CI before exposing a revision to consumers.
 - **ruff** is the linter and formatter. Line length 88. Lint select:
   `E, W, F, I, B, C4, UP, N, D, S, SIM, T20, PT, RUF, PTH, RET, PIE, FURB,
   PERF, DTZ, LOG, G, TC, FLY, RSE, SLOT, FA, A, EXE, ICN, PGH, PLE, ARG,
-  SLF` — about half of ruff's stable rules, skewed to the auto-fixable ones;
+  SLF`, `NPY` — about half of ruff's stable rules, skewed to the auto-fixable ones;
   pydocstyle convention **google**. `ARG`/`SLF` are off under `tests/**`.
   Ignored: `D203, D213` (the google convention's own exclusions) and
   `W191, D206, D300` (ruff documents these as always incompatible with
@@ -115,6 +115,13 @@ require successful candidate CI before exposing a revision to consumers.
     lines. preen's `removed-tests` compares the inventory with the merge base; a
     body that reappears under a new name counts as a rename. The lint job
     checks out full history so the base is there.
+  - **Declared lower bounds are tested.** The reusable CI's `lower-bounds` job
+    resolves every direct dependency to the lowest version its constraint
+    allows (`uv lock --resolution lowest-direct`), on the floor Python, and
+    runs the suite. A floor that fails there is raised to one that works.
+    NumPy's legacy global random state (`np.random.seed`, `np.random.rand`) is
+    banned by ruff's `NPY` rules, in tests too: a test that seeds global state
+    changes every test that runs after it.
   - **A skip never catches a failure.** No `except Exception:` (or bare
     `except`, or `AssertionError`) whose handler skips: a failed `assert` is an
     `Exception` and is reported as a skip. Catch the error that means
