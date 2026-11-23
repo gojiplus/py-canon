@@ -9,6 +9,19 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-21
+
+### Changed
+
+- The Python floor is 3.13: STANDARD.md, the template's `requires-python`
+  and ruff `target-version`, and the reusable CI's default matrix (now 3.13
+  and 3.14). preen runs under 3.13 in the lint job. Every fleet package
+  already passed on 3.14. py-canon's own floor stays at 3.12 until the fleet
+  has moved, so repos still at 3.12 keep resolving it.
+- `tools/fleet_python_floor.py` moves 3.12 to 3.13, and maps the old floor to
+  the new one in an explicit CI matrix instead of dropping it, so the matrix
+  keeps testing the floor.
+
 ## [1.4.0] - 2026-11-21
 
 ### Added

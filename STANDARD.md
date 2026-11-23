@@ -130,8 +130,8 @@ require successful candidate CI before exposing a revision to consumers.
 
 ## Python support
 
-- `requires-python = ">=3.12"`, **no upper bound**.
-- CI tests the floor and the ceiling (3.12 and 3.14 today).
+- `requires-python = ">=3.13"`, **no upper bound**.
+- CI tests the floor and the ceiling (3.13 and 3.14 today).
 - The floor advances roughly yearly (SPEC-0 spirit); advancing it is a change
   to this document + the template.
 

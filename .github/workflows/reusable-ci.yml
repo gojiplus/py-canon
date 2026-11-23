@@ -6,7 +6,7 @@ on:
       python-versions:
         description: 'JSON array of Python versions to test'
         type: string
-        default: '["3.12", "3.14"]'
+        default: '["3.13", "3.14"]'
       os:
         description: 'JSON array of runner images for the test matrix'
         type: string
@@ -217,7 +217,7 @@ jobs:
           if [ "$PREEN_BASE_REF" = "0000000000000000000000000000000000000000" ]; then
             unset PREEN_BASE_REF
           fi
-          uvx --python 3.12 --from preen==0.11.0 preen check --strict --skip tests
+          uvx --python 3.13 --from preen==0.11.0 preen check --strict --skip tests
 
   test:
     runs-on: ${{ matrix.os }}

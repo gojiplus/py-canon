@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """Raise a fleet repo's Python floor to the one STANDARD.md declares.
 
-STANDARD.md and the template say ``requires-python = ">=3.12"``; on
-2026-09-08, 24 of 47 fleet repos still said ``>=3.11``. The gap bit in
-gojiplus/gringotts, whose lower-bounds job could not resolve py-canon 1.3.0
-(itself >=3.12) under a 3.11 floor. preen's ``python-floor`` check exists
-but ships off until the fleet moves.
+Set ``OLD`` and ``NEW`` for the move. History: 3.11 to 3.12 on 2026-09-08
+(24 of 47 repos; gojiplus/gringotts's lower-bounds job could not resolve
+py-canon 1.3.0 under a 3.11 floor), 3.12 to 3.13 on 2026-11-21, after every
+fleet package passed on 3.14.
 
 Per repo: shallow clone, edit every place the floor is pinned
-(``requires-python``, ruff ``target-version``, the 3.11 classifier, pyright
-``pythonVersion``, and a ``python-versions`` matrix in ci.yml), ``uv lock``,
-ruff's fixes for what the new target switches on, commit on a branch, open a
-PR, arm auto-merge. CI decides whether it lands;
-nothing runs locally, because 24 test suites is a day and the gate is the
-same either way. An upper bound (``>=3.11,<3.14``) is kept.
+(``requires-python``, ruff ``target-version``, the ``OLD`` classifier, pyright
+``pythonVersion``, and a ``python-versions`` matrix in ci.yml, where ``OLD``
+becomes ``NEW`` so the matrix still tests the floor), ``uv lock``, ruff's
+fixes for what the new target switches on, commit on a branch, open a PR,
+arm auto-merge. CI decides whether it lands; nothing runs locally, because
+dozens of test suites is a day and the gate is the same either way. An upper
+bound (``>=3.12,<3.15``) is kept.
 
 Usage:  DRY_RUN=0 ./fleet_python_floor.py [owner/repo ...]   (default: FLEET)
 """
@@ -26,13 +26,13 @@ import subprocess
 import sys
 import tempfile
 
-OLD, NEW = "3.11", "3.12"
-BRANCH = "fleet/python-floor-312"
-TITLE = "Require Python 3.12, the fleet floor"
+OLD, NEW = "3.12", "3.13"
+BRANCH = "fleet/python-floor-313"
+TITLE = "Require Python 3.13, the fleet floor"
 BODY = f"""STANDARD.md and the py-canon template declare
-`requires-python = ">={NEW}"`; this repo still said `>={OLD}`. The gap is not
-cosmetic: py-canon 1.3.0 itself requires {NEW}, so a lower-bounds resolution
-under a {OLD} floor cannot succeed (gojiplus/gringotts hit exactly that).
+`requires-python = ">={NEW}"` from py-canon 1.5.0; this repo still said
+`>={OLD}`. The reusable CI now tests {NEW} and 3.14, and every fleet package
+already passed on 3.14 before the move.
 
 Mechanical edit from `tools/fleet_python_floor.py` in gojiplus/py-canon:
 `requires-python`, ruff `target-version`, the `{OLD}` classifier, pyright
@@ -44,12 +44,11 @@ is wrong for this repo, the fix belongs in the tool.
 """
 MESSAGE = f"""{TITLE}
 
-STANDARD.md and the template declare requires-python >={NEW}; this repo
-said >={OLD}. py-canon 1.3.0 itself needs {NEW}, so a lower-bounds
-resolution under a {OLD} floor cannot succeed. Mechanical edit from
+STANDARD.md and the template declare requires-python >={NEW} from py-canon
+1.5.0; this repo said >={OLD}. Mechanical edit from
 tools/fleet_python_floor.py in gojiplus/py-canon; CI decides.
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 """
 
 PYPROJECT_EDITS = [
@@ -69,6 +68,16 @@ PYPROJECT_EDITS = [
     ),
 ]
 MATRIX_RE = re.compile(r"(python-versions:\s*')(\[[^\]]*\])(')")
+# A single-Python pin elsewhere in a workflow (release.yml's
+# `uv sync --python 3.12`, setup-python's `python-version: "3.12"`) would
+# install a Python the new floor rejects, failing the next release.
+PIN_RES = [
+    re.compile(rf"(--python[ =])({re.escape(OLD)})\b"),
+    re.compile(rf"""(python-version:\s*["']?)({re.escape(OLD)})\b"""),
+]
+# py-canon's own floor moves last: while any fleet repo is still at OLD, a
+# py-canon requiring NEW cannot resolve in that repo's docs group.
+SKIP = {"gojiplus/py-canon"}
 
 
 def run(*args: str, cwd: pathlib.Path | None = None, check: bool = True) -> str:
@@ -92,18 +101,38 @@ def edit_matrix(path: pathlib.Path) -> bool:
         return False
     text = path.read_text()
 
-    def drop_old(match: re.Match[str]) -> str:
-        versions = [v for v in json.loads(match.group(2)) if v != OLD]
+    def raise_floor(match: re.Match[str]) -> str:
+        versions: list[str] = []
+        for v in json.loads(match.group(2)):
+            v = NEW if v == OLD else v
+            if v not in versions:
+                versions.append(v)
         return match.group(1) + json.dumps(versions) + match.group(3)
 
-    new = MATRIX_RE.sub(drop_old, text)
+    new = MATRIX_RE.sub(raise_floor, text)
     if new == text:
         return False
     path.write_text(new)
     return True
 
 
+def edit_workflow_pins(workflows: pathlib.Path) -> bool:
+    """Move single-Python pins in every workflow from OLD to NEW."""
+    changed = False
+    for path in sorted(workflows.glob("*.y*ml")) if workflows.is_dir() else []:
+        text = path.read_text()
+        new = text
+        for pattern in PIN_RES:
+            new = pattern.sub(rf"\g<1>{NEW}", new)
+        if new != text:
+            path.write_text(new)
+            changed = True
+    return changed
+
+
 def bump(repo: str, work: pathlib.Path, dry: bool) -> str:
+    if repo in SKIP:
+        return "skipped: moves after the fleet"
     if json.loads(
         run("gh", "pr", "list", "--repo", repo, "--head", BRANCH, "--json", "url")
     ):
@@ -113,6 +142,7 @@ def bump(repo: str, work: pathlib.Path, dry: bool) -> str:
     if not edit_pyproject(clone / "pyproject.toml"):
         return f"floor is not >={OLD}; nothing to do"
     edit_matrix(clone / ".github/workflows/ci.yml")
+    edit_workflow_pins(clone / ".github/workflows")
     run("uv", "lock", cwd=clone)
     # A higher ruff target switches on rules for syntax the old floor could
     # not use. UP040 (the `type` keyword for aliases) failed appeler/naampy's
