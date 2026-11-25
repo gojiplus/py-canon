@@ -106,9 +106,14 @@ def edit_matrix(path: pathlib.Path) -> bool:
     text = path.read_text()
 
     def raise_floor(match: re.Match[str]) -> str:
+        def below(v: str) -> bool:
+            return tuple(map(int, v.split("."))) < tuple(map(int, NEW.split(".")))
+
         versions: list[str] = []
         for v in json.loads(match.group(2)):
-            v = NEW if v == OLD else v
+            # Every version below the new floor goes, not only OLD: a matrix
+            # moving 3.11 to 3.13 can also list 3.12, which cannot install.
+            v = NEW if below(v) else v
             if v not in versions:
                 versions.append(v)
         return match.group(1) + json.dumps(versions) + match.group(3)

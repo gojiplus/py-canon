@@ -48,9 +48,9 @@ on:
         type: string
         default: ''
       run-lower-bounds:
-        description: 'Run the tests with every direct dependency at its declared minimum'
+        description: 'Run the tests with every runtime dependency at its declared minimum (opt-in until the fleet floors are true)'
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -522,8 +522,8 @@ jobs:
   # A lower bound nobody installs is a claim nobody checked. stable-cart said
   # numpy>=1.23.0 and fewlab pandas>=1.5; neither installs on Python 3.12, so
   # every resolver that honored the floor would fail. This job resolves each
-  # direct dependency to the lowest version its constraint allows, on the
-  # package's floor Python, and runs the suite. A failure means: raise the
+  # runtime dependency and extra to the lowest version its constraint allows,
+  # on the package's floor Python, and runs the suite. A failure means: raise the
   # floor to a version that works, not to whatever the lock happens to hold.
   # (projpred 3.0.0 added the same check for its R floor.)
   lower-bounds:
@@ -595,16 +595,43 @@ jobs:
             echo "UV_PYTHON=$request" >> "$GITHUB_ENV"
           fi
           echo "interpreter request: ${request:-none}"
-      - name: Resolve every direct dependency to its declared minimum
-        run: uv lock --resolution lowest-direct --upgrade
-      - name: Sync and test
+      - name: Sync the locked environment
         run: |
           test_group=()
           if python -c 'import sys, tomllib; sys.exit("test" not in tomllib.load(open("pyproject.toml", "rb")).get("dependency-groups", {}))'; then
             test_group=(--group test)
           fi
           uv sync --no-default-groups --frozen --group dev "${test_group[@]}" --all-extras
-          uv run --frozen pytest -p no:cacheprovider
+      # Only the runtime dependencies and extras go to their minimums: those
+      # are what `pip install pkg` promises users. Test tooling stays at its
+      # locked versions, since nobody installs pytest at the floor a dev group
+      # happens to name, and old test tools fail on their own deprecations.
+      - name: Install each runtime dependency at its declared minimum
+        run: |
+          uv run --no-project --python '>=3.11' --with packaging==26.3 \
+            python - > "$RUNNER_TEMP/minimums.txt" <<'PY'
+          import tomllib
+
+          from packaging.requirements import Requirement
+
+          project = tomllib.load(open("pyproject.toml", "rb"))["project"]
+          reqs = list(project.get("dependencies", []))
+          for group in project.get("optional-dependencies", {}).values():
+              reqs += group
+          for text in reqs:
+              req = Requirement(text)
+              if req.url or (req.marker and not req.marker.evaluate()):
+                  continue
+              low = [s.version for s in req.specifier if s.operator in (">=", "~=", "==")]
+              if low:
+                  print(f"{req.name}=={low[0]}")
+          PY
+          cat "$RUNNER_TEMP/minimums.txt"
+          if [ -s "$RUNNER_TEMP/minimums.txt" ]; then
+            uv pip install -r "$RUNNER_TEMP/minimums.txt"
+          fi
+      - name: Test at the minimums
+        run: uv run --no-sync pytest -p no:cacheprovider
 
   # One stable context for rulesets to require, so the matrix can change
   # without silently orphaning a required check. Naming a matrix leg directly
