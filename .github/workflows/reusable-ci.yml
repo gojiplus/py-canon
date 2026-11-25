@@ -601,35 +601,29 @@ jobs:
           if python -c 'import sys, tomllib; sys.exit("test" not in tomllib.load(open("pyproject.toml", "rb")).get("dependency-groups", {}))'; then
             test_group=(--group test)
           fi
-          uv sync --no-default-groups --frozen --group dev "${test_group[@]}" --all-extras
+          if [ -f uv.lock ]; then
+            uv sync --no-default-groups --frozen --group dev "${test_group[@]}" --all-extras
+          else
+            uv sync --no-default-groups --group dev "${test_group[@]}" --all-extras
+          fi
       # Only the runtime dependencies and extras go to their minimums: those
       # are what `pip install pkg` promises users. Test tooling stays at its
       # locked versions, since nobody installs pytest at the floor a dev group
       # happens to name, and old test tools fail on their own deprecations.
+      # The pins come from py_canon.lower_bounds, the same code the fleet
+      # floor tool uses, so the tool proposes exactly what this job tests.
       - name: Install each runtime dependency at its declared minimum
         run: |
-          uv run --no-project --python '>=3.11' --with packaging==26.3 \
-            python - > "$RUNNER_TEMP/minimums.txt" <<'PY'
-          import tomllib
-
-          from packaging.requirements import Requirement
-
-          project = tomllib.load(open("pyproject.toml", "rb"))["project"]
-          reqs = list(project.get("dependencies", []))
-          for group in project.get("optional-dependencies", {}).values():
-              reqs += group
-          for text in reqs:
-              req = Requirement(text)
-              if req.url or (req.marker and not req.marker.evaluate()):
-                  continue
-              low = [s.version for s in req.specifier if s.operator in (">=", "~=", "==")]
-              if low:
-                  print(f"{req.name}=={low[0]}")
-          PY
+          uvx --python '>=3.13' --from "git+https://github.com/gojiplus/py-canon@v1.6.0" \
+            py-canon-minimums > "$RUNNER_TEMP/minimums.txt"
           cat "$RUNNER_TEMP/minimums.txt"
           if [ -s "$RUNNER_TEMP/minimums.txt" ]; then
             uv pip install -r "$RUNNER_TEMP/minimums.txt"
           fi
+          # A minimum below what another installed package needs (idna 2.4
+          # under a requests that wants >=2.5) still lets the tests pass.
+          # It is not a working install, so fail here.
+          uv pip check
       - name: Test at the minimums
         run: uv run --no-sync pytest -p no:cacheprovider
 

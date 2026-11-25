@@ -21,6 +21,13 @@ not a release of its own.
   `numpy>=1.23.0`, fewlab's `pandas>=1.5` on Python 3.13) then fail CI instead
   of users; 35 of 44 fleet packages had one. It becomes the default once the
   fleet's floors are true. projpred 3.0.0 added the same check for its R floor.
+- `py_canon.lower_bounds` (CLI `py-canon-minimums`): the exact pins the
+  lower-bounds job installs. One pin per distribution at the highest lower
+  bound across base and extras, extras kept, markers evaluated per extra, and
+  skipped where no exact minimum can be read (`>`, `==4.*`, URLs, a minimum
+  its own specifier excludes). The job runs `uv pip check` afterwards, so a
+  minimum below what another installed package needs fails instead of passing.
+  py-canon now depends on `packaging`.
 - `tools/fleet_dependency_floors.py`: raises each runtime minimum to the oldest
   release with a wheel for the package's floor Python, and opens a PR per repo
   that switches the lower-bounds job on, so CI tests the new minimums.

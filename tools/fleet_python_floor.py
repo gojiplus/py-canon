@@ -100,20 +100,26 @@ def edit_pyproject(path: pathlib.Path) -> bool:
     return True
 
 
+def _below_new(version: str) -> bool:
+    """Whether a matrix entry such as ``3.12`` or ``3.14t`` is below NEW."""
+    m = re.match(r"(\d+)\.(\d+)", version)
+    if not m:
+        return False
+    return (int(m.group(1)), int(m.group(2))) < tuple(map(int, NEW.split(".")))
+
+
 def edit_matrix(path: pathlib.Path) -> bool:
     if not path.exists():
         return False
     text = path.read_text()
 
     def raise_floor(match: re.Match[str]) -> str:
-        def below(v: str) -> bool:
-            return tuple(map(int, v.split("."))) < tuple(map(int, NEW.split(".")))
 
         versions: list[str] = []
         for v in json.loads(match.group(2)):
             # Every version below the new floor goes, not only OLD: a matrix
             # moving 3.11 to 3.13 can also list 3.12, which cannot install.
-            v = NEW if below(v) else v
+            v = NEW if _below_new(v) else v
             if v not in versions:
                 versions.append(v)
         return match.group(1) + json.dumps(versions) + match.group(3)
@@ -132,7 +138,7 @@ def _raise_list(match: re.Match[str]) -> str:
     seen: list[str] = []
     for item in items:
         v = item.strip("'\"")
-        v = NEW if v == OLD else v
+        v = NEW if _below_new(v) else v
         if v not in seen:
             seen.append(v)
     return match.group(1) + "[" + ", ".join(f"{quote}{v}{quote}" for v in seen) + "]"
