@@ -197,6 +197,11 @@ def enable_lower_bounds(ci: pathlib.Path) -> bool:
     )
     if i is None:
         return False
+    # Only a caller that follows the moving v1 tag gets the input; a SHA or an
+    # older tag predates it, and the job would reject the unknown input.
+    ref = lines[i].split("@", 1)[1].split()[0]
+    if ref != "v1":
+        return False
     indent = len(lines[i]) - len(lines[i].lstrip())
     end = len(lines)
     for j in range(i + 1, len(lines)):
@@ -213,6 +218,8 @@ def enable_lower_bounds(ci: pathlib.Path) -> bool:
     else:
         start = 0
     for j in range(start, end):
+        if lines[j].startswith(f"{pad}with:") and lines[j].split(":", 1)[1].strip():
+            return False  # an inline mapping, `with: {...}`; edit by hand
         if lines[j].startswith(f"{pad}with:"):
             for k in range(j + 1, end):
                 if re.match(rf"{pad}  run-lower-bounds:", lines[k]):
@@ -236,7 +243,10 @@ def bump_repo(repo: str, tmp: pathlib.Path, dry: bool) -> str:
     if not changes:
         return "no minimum needs raising"
     if not enable_lower_bounds(clone / ".github" / "workflows" / "ci.yml"):
-        return f"!! {len(changes)} to raise, but ci.yml does not call the reusable CI"
+        return (
+            f"!! {len(changes)} to raise, but ci.yml does not call the reusable CI "
+            "at @v1 with a block `with:`; edit by hand"
+        )
     lines = "".join(f"\n      {c}" for c in changes)
     if dry:
         return f"would open PR: {len(changes)} raised{lines}"

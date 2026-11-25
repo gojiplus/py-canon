@@ -14,8 +14,8 @@ wildcard ``==4.*``, a URL, or a minimum its own specifier excludes
 (``>=1,!=1``). Markers are evaluated in the current environment, with
 ``extra`` set to each optional group's name.
 
-Usage: ``python -m py_canon.lower_bounds [pyproject.toml]`` prints one pin
-per line.
+Usage: ``python -m py_canon.lower_bounds [--python-version X.Y.Z]
+[pyproject.toml]`` prints one pin per line.
 """
 
 import sys
@@ -24,39 +24,48 @@ from pathlib import Path
 
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
 
 
-def _minimum(req: Requirement) -> Version | None:
-    """The exact version the requirement's lower bound names, if any.
+def _minimum(spec: SpecifierSet) -> Version | None:
+    """The exact version the combined lower bounds name, if it is allowed.
 
     Args:
-        req: A parsed requirement.
+        spec: Every specifier on one distribution, combined.
 
     Returns:
-        The minimum, or None when no installable exact minimum can be read.
+        The highest lower bound, or None when none can be read or the
+        combined specifier excludes it.
     """
     lows: list[Version] = []
-    for spec in req.specifier:
-        if spec.operator in (">=", "~=") or (
-            spec.operator == "==" and "*" not in spec.version
+    for item in spec:
+        if item.operator in (">=", "~=") or (
+            item.operator == "==" and "*" not in item.version
         ):
             try:
-                lows.append(Version(spec.version))
+                lows.append(Version(item.version))
             except InvalidVersion:
                 return None
     if not lows:
         return None
     low = max(lows)
-    return low if req.specifier.contains(low, prereleases=True) else None
+    return low if spec.contains(low, prereleases=True) else None
 
 
-def minimums(pyproject: dict) -> list[str]:
+def minimums(pyproject: dict, python_version: str | None = None) -> list[str]:
     """Exact pins for the runtime dependencies' declared minimums.
+
+    Every requirement on a distribution counts, including ones with no lower
+    bound: base ``idna>=2.4`` with an extra's ``idna!=2.4`` has no exact
+    minimum, and an extra's ``g[http]`` adds ``http`` to base ``g>=2``.
 
     Args:
         pyproject: The parsed ``pyproject.toml``.
+        python_version: ``X.Y`` of the interpreter the pins are for, so
+            ``python_version`` markers are evaluated there and not where
+            this helper runs.
 
     Returns:
         ``name[extras]==version`` lines, one per distribution, sorted.
@@ -65,7 +74,10 @@ def minimums(pyproject: dict) -> list[str]:
     groups: list[tuple[str, list[str]]] = [("", project.get("dependencies", []))]
     groups += list(project.get("optional-dependencies", {}).items())
     env: dict[str, str] = {k: str(v) for k, v in default_environment().items()}
-    best: dict[str, tuple[Version, set[str], str]] = {}
+    if python_version:
+        env["python_version"] = ".".join(python_version.split(".")[:2])
+        env["python_full_version"] = python_version
+    found: dict[str, tuple[str, set[str], SpecifierSet]] = {}
     for extra, reqs in groups:
         for text in reqs:
             req = Requirement(text)
@@ -73,18 +85,14 @@ def minimums(pyproject: dict) -> list[str]:
                 continue
             if req.marker and not req.marker.evaluate({**env, "extra": extra}):
                 continue
-            low = _minimum(req)
-            if low is None:
-                continue
             key = canonicalize_name(req.name)
-            have = best.get(key)
-            extras = set(req.extras) | (have[1] if have else set())
-            if have is None or low > have[0]:
-                best[key] = (low, extras, req.name)
-            else:
-                best[key] = (have[0], extras, have[2])
+            name, extras, spec = found.get(key, (req.name, set(), SpecifierSet()))
+            found[key] = (name, extras | set(req.extras), spec & req.specifier)
     lines = []
-    for low, extras, name in best.values():
+    for name, extras, spec in found.values():
+        low = _minimum(spec)
+        if low is None:
+            continue
         tag = f"[{','.join(sorted(extras))}]" if extras else ""
         lines.append(f"{name}{tag}=={low}")
     return sorted(lines, key=str.lower)
@@ -94,12 +102,16 @@ def main(argv: list[str] | None = None) -> None:
     """Print the pins for a ``pyproject.toml``.
 
     Args:
-        argv: ``[path]``; defaults to ``pyproject.toml`` in the working
-            directory.
+        argv: ``[--python-version X.Y.Z] [path]``; the path defaults to
+            ``pyproject.toml`` in the working directory.
     """
-    args = sys.argv[1:] if argv is None else argv
+    args = list(sys.argv[1:] if argv is None else argv)
+    version = None
+    if args[:1] == ["--python-version"]:
+        version = args[1]
+        args = args[2:]
     path = Path(args[0] if args else "pyproject.toml")
-    for line in minimums(tomllib.loads(path.read_text())):
+    for line in minimums(tomllib.loads(path.read_text()), version):
         sys.stdout.write(line + "\n")
 
 

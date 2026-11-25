@@ -614,8 +614,11 @@ jobs:
       # floor tool uses, so the tool proposes exactly what this job tests.
       - name: Install each runtime dependency at its declared minimum
         run: |
+          # Markers are evaluated for the interpreter the tests run on, not the
+          # one the helper runs on.
+          target=$(uv run --no-sync python -c 'import platform; print(platform.python_version())')
           uvx --python '>=3.13' --from "git+https://github.com/gojiplus/py-canon@v1.6.0" \
-            py-canon-minimums > "$RUNNER_TEMP/minimums.txt"
+            py-canon-minimums --python-version "$target" > "$RUNNER_TEMP/minimums.txt"
           cat "$RUNNER_TEMP/minimums.txt"
           if [ -s "$RUNNER_TEMP/minimums.txt" ]; then
             uv pip install -r "$RUNNER_TEMP/minimums.txt"

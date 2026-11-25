@@ -52,3 +52,17 @@ def test_compatible_and_exact_pins():
 
 def test_no_dependencies_gives_no_pins():
     assert minimums({"project": {}}) == []
+
+
+def test_a_constraint_without_a_minimum_can_exclude_the_pin():
+    assert _pins(["idna>=2.4"], x=["idna!=2.4"]) == []
+
+
+def test_extras_from_a_bare_requirement_are_kept():
+    assert _pins(["g>=2"], http=["g[http]"]) == ["g[http]==2"]
+
+
+def test_markers_use_the_target_python():
+    deps = {"project": {"dependencies": ["idna>=2.5; python_version < '3.13'"]}}
+    assert minimums(deps, "3.12.9") == ["idna==2.5"]
+    assert minimums(deps, "3.13.1") == []
