@@ -9,6 +9,39 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-25
+
+### Added
+
+- A `lower-bounds` job in the reusable CI, opt-in with
+  `run-lower-bounds: true`: the locked environment, then every runtime
+  dependency and extra reinstalled at its declared minimum, then the suite.
+  Test tooling stays at its locked versions, since a dev group's minimums are
+  not a promise to users. Declared floors that cannot even install (stable-cart's
+  `numpy>=1.23.0`, fewlab's `pandas>=1.5` on Python 3.13) then fail CI instead
+  of users; 35 of 44 fleet packages had one. It becomes the default once the
+  fleet's floors are true. projpred 3.0.0 added the same check for its R floor.
+- `py_canon.lower_bounds` (CLI `py-canon-minimums`): the exact pins the
+  lower-bounds job installs. One pin per distribution at the highest lower
+  bound across base and extras, extras kept, markers evaluated per extra, and
+  skipped where no exact minimum can be read (`>`, `==4.*`, URLs, a minimum
+  its own specifier excludes). The job runs `uv pip check` afterwards, so a
+  minimum below what another installed package needs fails instead of passing.
+  py-canon now depends on `packaging`.
+- `tools/fleet_dependency_floors.py`: raises each runtime minimum to the oldest
+  release with a wheel for the package's floor Python, and opens a PR per repo
+  that switches the lower-bounds job on, so CI tests the new minimums.
+- ruff's `NPY` rules in the template: no legacy global NumPy random state, in
+  tests too.
+
+### Changed
+
+- py-canon itself requires Python 3.13, now that every fleet repo does.
+- `tools/fleet_python_floor.py` also moves `uv python install X` and YAML flow
+  lists of versions, and drops every matrix version below the new floor, not
+  only the old floor: the patterns that left uijudge-bench, rmcp, devclean and
+  softverse red in the 3.13 sweep.
+
 ## [1.5.0] - 2026-11-21
 
 ### Changed

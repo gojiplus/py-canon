@@ -47,6 +47,10 @@ on:
         description: 'Import name to smoke-test from the built wheel (defaults to repo package auto-detect)'
         type: string
         default: ''
+      run-lower-bounds:
+        description: 'Run the tests with every runtime dependency at its declared minimum (opt-in until the fleet floors are true)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -515,6 +519,117 @@ jobs:
           raise SystemExit(1)
           PY
 
+  # A lower bound nobody installs is a claim nobody checked. stable-cart said
+  # numpy>=1.23.0 and fewlab pandas>=1.5; neither installs on Python 3.12, so
+  # every resolver that honored the floor would fail. This job resolves each
+  # runtime dependency and extra to the lowest version its constraint allows,
+  # on the package's floor Python, and runs the suite. A failure means: raise the
+  # floor to a version that works, not to whatever the lock happens to hold.
+  # (projpred 3.0.0 added the same check for its R floor.)
+  lower-bounds:
+    name: Lowest direct dependencies
+    if: inputs.run-lower-bounds
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.test-timeout-minutes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Use the package's minimum Python
+        # uv uses the runner's own Python (3.12) only when it satisfies
+        # requires-python; otherwise it downloads the newest release, which can be
+        # newer than a dependency's wheels (torch had none for 3.15 when 3.15
+        # shipped). The test matrix names its versions; this pins the jobs that
+        # do not to the lowest minor version requires-python allows, intersected
+        # with the requires-python of each group the job installs: FLOOR_GROUPS,
+        # plus the repo's default groups where a uv sync or uv run adds them.
+        # A UV_PYTHON the caller set, or the repo's .python-version, is left alone.
+        env:
+          FLOOR_GROUPS: "dev test"
+          FLOOR_DEFAULTS: "false"
+        run: |
+          if [ -n "${UV_PYTHON:-}" ] || [ -f .python-version ]; then
+            echo "keeping the interpreter already chosen"
+            exit 0
+          fi
+          request=$(uv run --no-project --python '>=3.11' --with packaging==26.3 \
+            python - <<'PY'
+          import os
+          import tomllib
+
+          from packaging.specifiers import SpecifierSet
+          from packaging.utils import canonicalize_name as canon
+
+          try:
+              with open("pyproject.toml", "rb") as handle:
+                  data = tomllib.load(handle)
+          except FileNotFoundError:
+              data = {}
+          specs = [data.get("project", {}).get("requires-python", "")]
+          uv_table = data.get("tool", {}).get("uv", {})
+          # Group names compare normalized, as the dependency-groups spec says.
+          groups = {canon(k): v for k, v in uv_table.get("dependency-groups", {}).items()}
+          names = {canon(g) for g in os.environ.get("FLOOR_GROUPS", "").split()}
+          # Jobs whose uv sync or bare uv run also installs the default groups.
+          if os.environ.get("FLOOR_DEFAULTS") == "true":
+              defaults = uv_table.get("default-groups", ["dev"])
+              names |= set(groups) if defaults == "all" else {canon(g) for g in defaults}
+          for name in sorted(names):
+              specs.append(groups.get(name, {}).get("requires-python", ""))
+          spec = SpecifierSet(",".join(s for s in specs if s))
+          if str(spec):
+              for minor in range(8, 100):
+                  if any(spec.contains(f"3.{minor}.{patch}") for patch in range(1000)):
+                      print(f"==3.{minor}.*,{spec}")
+                      break
+              else:
+                  print(f"!{spec}")  # nothing satisfies it; the shell warns
+          PY
+          )
+          if [ "${request#!}" != "$request" ]; then
+            echo "::warning::no Python 3.x satisfies ${request#!}"
+            request=""
+          fi
+          if [ -n "$request" ]; then
+            echo "UV_PYTHON=$request" >> "$GITHUB_ENV"
+          fi
+          echo "interpreter request: ${request:-none}"
+      - name: Sync the locked environment
+        run: |
+          test_group=()
+          if python -c 'import sys, tomllib; sys.exit("test" not in tomllib.load(open("pyproject.toml", "rb")).get("dependency-groups", {}))'; then
+            test_group=(--group test)
+          fi
+          if [ -f uv.lock ]; then
+            uv sync --no-default-groups --frozen --group dev "${test_group[@]}" --all-extras
+          else
+            uv sync --no-default-groups --group dev "${test_group[@]}" --all-extras
+          fi
+      # Only the runtime dependencies and extras go to their minimums: those
+      # are what `pip install pkg` promises users. Test tooling stays at its
+      # locked versions, since nobody installs pytest at the floor a dev group
+      # happens to name, and old test tools fail on their own deprecations.
+      # The pins come from py_canon.lower_bounds, the same code the fleet
+      # floor tool uses, so the tool proposes exactly what this job tests.
+      - name: Install each runtime dependency at its declared minimum
+        run: |
+          # Markers are evaluated for the interpreter the tests run on, not the
+          # one the helper runs on.
+          target=$(uv run --no-sync python -c 'import platform; print(platform.python_version())')
+          uvx --python '>=3.13' --from "git+https://github.com/gojiplus/py-canon@v1.6.0" \
+            py-canon-minimums --python-version "$target" > "$RUNNER_TEMP/minimums.txt"
+          cat "$RUNNER_TEMP/minimums.txt"
+          if [ -s "$RUNNER_TEMP/minimums.txt" ]; then
+            uv pip install -r "$RUNNER_TEMP/minimums.txt"
+          fi
+          # A minimum below what another installed package needs (idna 2.4
+          # under a requests that wants >=2.5) still lets the tests pass.
+          # It is not a working install, so fail here.
+          uv pip check
+      - name: Test at the minimums
+        run: uv run --no-sync pytest -p no:cacheprovider
+
   # One stable context for rulesets to require, so the matrix can change
   # without silently orphaning a required check. Naming a matrix leg directly
   # in a ruleset is how naampy and outkast ended up requiring contexts that no
@@ -523,7 +638,7 @@ jobs:
   gate:
     name: gate
     if: always()
-    needs: [lint, test, wheel, workflow-security, dependency-review, lock-regression]
+    needs: [lint, test, wheel, lower-bounds, workflow-security, dependency-review, lock-regression]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

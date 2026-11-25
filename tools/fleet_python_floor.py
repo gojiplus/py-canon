@@ -74,7 +74,11 @@ MATRIX_RE = re.compile(r"(python-versions:\s*')(\[[^\]]*\])(')")
 PIN_RES = [
     re.compile(rf"(--python[ =])({re.escape(OLD)})\b"),
     re.compile(rf"""(python-version:\s*["']?)({re.escape(OLD)})\b"""),
+    re.compile(rf"(uv python install )({re.escape(OLD)})\b"),
 ]
+# A repo's own workflow can list versions as a YAML flow sequence,
+# `python-version: ['3.12', '3.13', '3.14']`; OLD becomes NEW there too.
+LIST_RE = re.compile(r"""(python(?:-version)?:\s*)(\[[^\]\n]*\])""")
 # py-canon's own floor moves last: while any fleet repo is still at OLD, a
 # py-canon requiring NEW cannot resolve in that repo's docs group.
 SKIP = {"gojiplus/py-canon"}
@@ -96,15 +100,26 @@ def edit_pyproject(path: pathlib.Path) -> bool:
     return True
 
 
+def _below_new(version: str) -> bool:
+    """Whether a matrix entry such as ``3.12`` or ``3.14t`` is below NEW."""
+    m = re.match(r"(\d+)\.(\d+)", version)
+    if not m:
+        return False
+    return (int(m.group(1)), int(m.group(2))) < tuple(map(int, NEW.split(".")))
+
+
 def edit_matrix(path: pathlib.Path) -> bool:
     if not path.exists():
         return False
     text = path.read_text()
 
     def raise_floor(match: re.Match[str]) -> str:
+
         versions: list[str] = []
         for v in json.loads(match.group(2)):
-            v = NEW if v == OLD else v
+            # Every version below the new floor goes, not only OLD: a matrix
+            # moving 3.11 to 3.13 can also list 3.12, which cannot install.
+            v = NEW if _below_new(v) else v
             if v not in versions:
                 versions.append(v)
         return match.group(1) + json.dumps(versions) + match.group(3)
@@ -116,6 +131,19 @@ def edit_matrix(path: pathlib.Path) -> bool:
     return True
 
 
+def _raise_list(match: re.Match[str]) -> str:
+    """Map OLD to NEW in a YAML flow list of versions, dropping duplicates."""
+    items = [i.strip() for i in match.group(2)[1:-1].split(",") if i.strip()]
+    quote = items[0][0] if items and items[0][0] in "'\"" else ""
+    seen: list[str] = []
+    for item in items:
+        v = item.strip("'\"")
+        v = NEW if _below_new(v) else v
+        if v not in seen:
+            seen.append(v)
+    return match.group(1) + "[" + ", ".join(f"{quote}{v}{quote}" for v in seen) + "]"
+
+
 def edit_workflow_pins(workflows: pathlib.Path) -> bool:
     """Move single-Python pins in every workflow from OLD to NEW."""
     changed = False
@@ -124,6 +152,7 @@ def edit_workflow_pins(workflows: pathlib.Path) -> bool:
         new = text
         for pattern in PIN_RES:
             new = pattern.sub(rf"\g<1>{NEW}", new)
+        new = LIST_RE.sub(_raise_list, new)
         if new != text:
             path.write_text(new)
             changed = True
