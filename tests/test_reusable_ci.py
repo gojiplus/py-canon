@@ -25,8 +25,9 @@ def test_ci_syncs_only_the_canonical_dev_group() -> None:
     assert frozen in release_workflow
     assert unlocked in release_workflow
     # Four: the lint, test and lower-bounds jobs' syncs, plus the wheel job's
-    # install.
-    assert workflow.count("test_group=(--group test)") == 4
+    # Three: the lint and test jobs' syncs, plus the wheel job's install. The
+    # lower-bounds job builds a fresh environment instead of syncing the lock.
+    assert workflow.count("test_group=(--group test)") == 3
     assert release_workflow.count("test_group=(--group test)") == 1
     assert "--all-groups" not in workflow
     assert "--all-groups" not in release_workflow

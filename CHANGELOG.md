@@ -9,6 +9,22 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-11-25
+
+### Fixed
+
+- The lower-bounds job builds a fresh environment instead of reinstalling
+  minimums into the lock: runtime dependencies at their minimums, dev and test
+  groups unpinned so the resolver picks compatible tool versions, the package
+  with every extra, then `uv pip check` and the tests. On the first fleet run,
+  mixing minimums into the lock failed 28 of 44 PRs, some for a test tool's
+  needs (copier wanted platformdirs>=4.3.6) rather than the package's.
+  `py-canon-minimums --environment` writes the file.
+- `tools/fleet_dependency_floors.py` resolves the runtime set at its lowest
+  (`uv pip compile --resolution lowest-direct`, Linux wheels only) and raises
+  any minimum another dependency needs higher; rerunning replaces an open PR's
+  branch instead of failing on it.
+
 ## [1.6.0] - 2026-11-25
 
 ### Added

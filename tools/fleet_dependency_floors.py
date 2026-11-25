@@ -161,8 +161,73 @@ def raise_floors(
                 continue
             arr[i] = with_floor(req, cands[0])
             changes.append(f"{item} -> {arr[i]}")
+    # The wheel check sees each dependency alone. A minimum can still be
+    # unsatisfiable next to the others (fewlab's numpy 2.1 under a simcheck
+    # that needs >=2.4.6), so resolve the whole runtime set at its lowest and
+    # raise any minimum the resolver had to lift.
+    resolved = lowest_consistent(
+        [i for arr in requirement_arrays(doc) for i in arr if isinstance(i, str)],
+        floor,
+    )
+    for arr in requirement_arrays(doc):
+        for i, item in enumerate(arr):
+            if not isinstance(item, str):
+                continue
+            req = Requirement(item)
+            got = resolved.get(canonicalize_name(req.name))
+            have = lower_bound(req)
+            if got is None or req.url or (have is not None and got <= have):
+                continue
+            if any(s.operator in ("==", "~=", "===") for s in req.specifier):
+                continue
+            arr[i] = with_floor(req, got)
+            changes.append(f"{item} -> {arr[i]} (needed by another dependency)")
     pyproject.write_text(tomlkit.dumps(doc))
     return changes, skipped
+
+
+def lowest_consistent(reqs: list[str], floor: tuple[int, int]) -> dict[str, Version]:
+    """Resolve requirements at their lowest, as Linux wheels for the floor.
+
+    Returns ``{name: version}``, or ``{}`` when they cannot be resolved,
+    which leaves the floors as the wheel pass set them for CI to judge.
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".in", delete=False) as fh:
+        fh.write("\n".join(reqs) + "\n")
+        path = fh.name
+    try:
+        out = run(
+            "uv",
+            "pip",
+            "compile",
+            path,
+            "--resolution",
+            "lowest-direct",
+            "--python-version",
+            f"{floor[0]}.{floor[1]}",
+            "--python-platform",
+            "x86_64-manylinux_2_28",
+            "--only-binary",
+            ":all:",
+            "--no-header",
+            "--no-annotate",
+            "-q",
+        )
+    except subprocess.CalledProcessError:
+        return {}
+    finally:
+        pathlib.Path(path).unlink()
+    pins = {}
+    for line in out.splitlines():
+        name, sep, ver = line.partition("==")
+        if sep and not line.startswith(("#", "-")):
+            try:
+                pins[canonicalize_name(name.split("[")[0].strip())] = Version(
+                    ver.split(";")[0].strip()
+                )
+            except InvalidVersion:
+                continue
+    return pins
 
 
 def python_floor(pyproject: pathlib.Path) -> tuple[int, int]:
@@ -266,7 +331,10 @@ def bump_repo(repo: str, tmp: pathlib.Path, dry: bool) -> str:
         "in gojiplus/py-canon.\n\n"
         "🤖 Generated with [Claude Code](https://claude.com/claude-code)\n"
     )
-    run("git", "checkout", "-q", "-b", BRANCH, cwd=clone)
+    existing = json.loads(
+        run("gh", "pr", "list", "--repo", repo, "--head", BRANCH, "--json", "url")
+    )
+    run("git", "checkout", "-q", "-B", BRANCH, cwd=clone)
     run("git", "add", "-A", cwd=clone)
     message = (
         f"{TITLE}\n\nThe declared minimums could not be installed on Python "
@@ -283,7 +351,11 @@ def bump_repo(repo: str, tmp: pathlib.Path, dry: bool) -> str:
         check=True,
         capture_output=True,
     )
-    run("git", "push", "-q", "-u", "origin", BRANCH, cwd=clone)
+    # Rerunning replaces the branch: the PR always shows this tool's current
+    # answer against the current default branch, not a stack of patches.
+    run("git", "push", "-q", "-f", "-u", "origin", BRANCH, cwd=clone)
+    if existing:
+        return f"{existing[0]['url']} (updated; {len(changes)} raised)"
     url = run(
         "gh",
         "pr",

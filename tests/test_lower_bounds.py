@@ -1,6 +1,6 @@
 """Tests for py_canon.lower_bounds, one per case the 1.6.0 review found."""
 
-from py_canon.lower_bounds import minimums
+from py_canon.lower_bounds import environment, group_requirements, minimums
 
 
 def _pins(deps=(), **extras):
@@ -66,3 +66,29 @@ def test_markers_use_the_target_python():
     deps = {"project": {"dependencies": ["idna>=2.5; python_version < '3.13'"]}}
     assert minimums(deps, "3.12.9") == ["idna==2.5"]
     assert minimums(deps, "3.13.1") == []
+
+
+def test_groups_expand_include_group_once():
+    data = {
+        "dependency-groups": {
+            "dev": ["ruff", {"include-group": "test"}],
+            "test": ["pytest>=8", "ruff"],
+        }
+    }
+    assert group_requirements(data) == ["ruff", "pytest>=8"]
+
+
+def test_environment_lists_pins_tools_and_the_package_with_extras():
+    data = {
+        "project": {
+            "dependencies": ["numpy>=2.1"],
+            "optional-dependencies": {"io": ["pyarrow>=18"], "web": []},
+        },
+        "dependency-groups": {"test": ["pytest>=8"]},
+    }
+    assert environment(data) == [
+        "numpy==2.1",
+        "pyarrow==18",
+        "pytest>=8",
+        "-e .[io,web]",
+    ]
