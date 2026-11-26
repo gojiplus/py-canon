@@ -610,7 +610,15 @@ jobs:
           uvx --python '>=3.13' --from "git+https://github.com/gojiplus/py-canon@v1.6.1" \
             py-canon-minimums --environment --python-version "$target" > "$RUNNER_TEMP/lb.txt"
           cat "$RUNNER_TEMP/lb.txt"
-          uv pip install --python "$py" -r "$RUNNER_TEMP/lb.txt"
+          # A flattened requirements file loses group source overrides. In
+          # fewlab, PyPI "simcheck" is a different project from the Git source.
+          group_args=()
+          for group in dev test; do
+            if "$py" -c 'import sys, tomllib; groups = tomllib.load(open("pyproject.toml", "rb")).get("dependency-groups", {}); sys.exit(sys.argv[1] not in {g.lower() for g in groups})' "$group"; then
+              group_args+=(--group "$group")
+            fi
+          done
+          uv pip install --python "$py" "${group_args[@]}" -r "$RUNNER_TEMP/lb.txt"
           # A minimum below what another dependency needs (fewlab's numpy 2.1
           # under a simcheck that wants >=2.4.6) is not a working install.
           uv pip check --python "$py"

@@ -22,7 +22,8 @@ not a release of its own.
   `py-canon-minimums --environment` writes the file.
 - Dependency groups now use the resolver shipped in packaging 26.1, including
   normalized group names and nested includes. Conditional pytest requirements
-  still install a test runner.
+  still install a test runner. uv reads each active group's source overrides
+  from the project, including Git and local dependencies.
 - `tools/fleet_dependency_floors.py` keeps requirements for other targets
   intact and resolves the runtime set at its lowest
   (`uv pip compile --resolution lowest-direct`, Linux wheels only) and raises
