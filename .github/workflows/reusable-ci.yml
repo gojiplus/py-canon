@@ -629,7 +629,9 @@ jobs:
           # under a simcheck that wants >=2.4.6) is not a working install.
           uv pip check --python "$py"
       - name: Test at the minimums
-        run: '"$RUNNER_TEMP/lb/bin/python" -m pytest -p no:cacheprovider'
+        run: |
+          source "$RUNNER_TEMP/lb/bin/activate"
+          python -m pytest -p no:cacheprovider
 
   # One stable context for rulesets to require, so the matrix can change
   # without silently orphaning a required check. Naming a matrix leg directly

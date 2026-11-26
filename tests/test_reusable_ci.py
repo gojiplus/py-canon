@@ -678,3 +678,33 @@ def test_floor_install_resolves_a_test_tool_from_its_project_source(tmp_path):
         text=True,
     )
     assert "floor-source-probe @ file://" in result.stderr
+
+
+def test_floor_tests_find_commands_installed_in_the_environment(tmp_path):
+    job = yaml.safe_load(WORKFLOW.read_text())["jobs"]["lower-bounds"]
+    step = next(
+        s["run"] for s in job["steps"] if s.get("name") == "Test at the minimums"
+    )
+    venv.EnvBuilder(system_site_packages=True).create(tmp_path / "lb")
+    tool = tmp_path / "lb/bin/floor-tool-probe"
+    tool.write_text("#!/bin/sh\nexit 0\n")
+    tool.chmod(0o755)
+    (tmp_path / "test_probe.py").write_text(
+        "import os, shutil\n"
+        "def test_command():\n"
+        '    assert shutil.which("floor-tool-probe") == os.path.join('
+        'os.environ["RUNNER_TEMP"], "lb", "bin", "floor-tool-probe")\n'
+    )
+    bash = shutil.which("bash")
+    assert bash is not None
+    subprocess.run(  # noqa: S603
+        [bash, "-eu", "-c", step],
+        cwd=tmp_path,
+        env=os.environ
+        | {
+            "RUNNER_TEMP": str(tmp_path),
+            "PYTHONPATH": os.pathsep.join(sys.path),
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        },
+        check=True,
+    )
