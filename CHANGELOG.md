@@ -9,6 +9,9 @@ not a release of its own.
 
 ## [Unreleased]
 
+- Activate the minimum-version environment before pytest so tests that call an
+  installed command find the same tools as tests that import a Python module.
+
 ## [1.6.1] - 2026-11-25
 
 ### Fixed
