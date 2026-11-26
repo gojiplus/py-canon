@@ -1,7 +1,7 @@
 """Pin each runtime dependency of a package to its declared minimum.
 
-The reusable CI's ``lower-bounds`` job installs these pins on top of the
-locked environment and runs the tests, which is the only check that a
+The reusable CI's ``lower-bounds`` job installs these pins in a fresh
+environment and runs the tests, which is the only check that a
 package's declared minimums are true. ``tools/fleet_dependency_floors.py``
 uses the same function, so the tool proposes what the job will test.
 
@@ -22,6 +22,7 @@ import sys
 import tomllib
 from pathlib import Path
 
+from packaging.dependency_groups import resolve_dependency_groups
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
@@ -98,20 +99,71 @@ def minimums(pyproject: dict, python_version: str | None = None) -> list[str]:
     return sorted(lines, key=str.lower)
 
 
+def group_requirements(
+    pyproject: dict, names: tuple[str, ...] = ("dev", "test")
+) -> list[str]:
+    """The requirement strings of dependency groups, with include-group expanded.
+
+    Args:
+        pyproject: The parsed ``pyproject.toml``.
+        names: Groups to collect; ones the project does not define are skipped.
+
+    Returns:
+        Requirement strings in declaration order, duplicates removed.
+    """
+    groups = pyproject.get("dependency-groups", {})
+    available = {canonicalize_name(name) for name in groups}
+    selected = [name for name in names if canonicalize_name(name) in available]
+    return list(dict.fromkeys(resolve_dependency_groups(groups, *selected)))
+
+
+def environment(pyproject: dict, python_version: str | None = None) -> list[str]:
+    """A requirements file for a fresh environment at the runtime minimums.
+
+    The runtime dependencies are pinned at their minimums, the dev and test
+    groups are listed unpinned so the resolver picks tool versions that work
+    with those minimums, and the package itself is installed editable with
+    every extra.
+
+    Args:
+        pyproject: The parsed ``pyproject.toml``.
+        python_version: Passed to :func:`minimums`.
+
+    Returns:
+        Requirement lines.
+    """
+    extras = sorted(pyproject.get("project", {}).get("optional-dependencies", {}))
+    tag = f"[{','.join(extras)}]" if extras else ""
+    tools = group_requirements(pyproject)
+    if not any(
+        canonicalize_name(req.name) == "pytest" and req.marker is None
+        for req in map(Requirement, tools)
+    ):
+        tools.append("pytest")
+    return [*minimums(pyproject, python_version), *tools, f"-e .{tag}"]
+
+
 def main(argv: list[str] | None = None) -> None:
     """Print the pins for a ``pyproject.toml``.
 
     Args:
-        argv: ``[--python-version X.Y.Z] [path]``; the path defaults to
-            ``pyproject.toml`` in the working directory.
+        argv: ``[--python-version X.Y.Z] [--environment] [path]``. With
+            ``--environment``, print :func:`environment` instead of the pins.
+            The path defaults to ``pyproject.toml``.
     """
     args = list(sys.argv[1:] if argv is None else argv)
     version = None
-    if args[:1] == ["--python-version"]:
-        version = args[1]
-        args = args[2:]
+    full = False
+    while args[:1] and args[0].startswith("--"):
+        flag = args.pop(0)
+        if flag == "--python-version":
+            version = args.pop(0)
+        elif flag == "--environment":
+            full = True
     path = Path(args[0] if args else "pyproject.toml")
-    for line in minimums(tomllib.loads(path.read_text()), version):
+    data = tomllib.loads(path.read_text())
+    lines = environment(data, version) if full else minimums(data, version)
+    for line in lines:
         sys.stdout.write(line + "\n")
 
 

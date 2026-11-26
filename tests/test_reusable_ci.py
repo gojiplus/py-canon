@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+import venv
 from pathlib import Path
 
 import pytest
@@ -24,9 +25,9 @@ def test_ci_syncs_only_the_canonical_dev_group() -> None:
     assert unlocked in workflow
     assert frozen in release_workflow
     assert unlocked in release_workflow
-    # Four: the lint, test and lower-bounds jobs' syncs, plus the wheel job's
-    # install.
-    assert workflow.count("test_group=(--group test)") == 4
+    # Three: the lint and test jobs' syncs, plus the wheel job's install. The
+    # lower-bounds job builds a fresh environment instead of syncing the lock.
+    assert workflow.count("test_group=(--group test)") == 3
     assert release_workflow.count("test_group=(--group test)") == 1
     assert "--all-groups" not in workflow
     assert "--all-groups" not in release_workflow
@@ -631,3 +632,49 @@ def test_template_and_repo_share_the_lychee_hook() -> None:
         hooks = [h for r in repos for h in r.get("hooks", []) if h["id"] == "lychee"]
         assert len(hooks) == 1, config
         assert "--offline" in hooks[0]["args"]
+
+
+def test_floor_install_resolves_a_test_tool_from_its_project_source(tmp_path):
+    workflow = yaml.safe_load(WORKFLOW.read_text())
+    step = next(
+        s["run"]
+        for s in workflow["jobs"]["lower-bounds"]["steps"]
+        if s.get("name") == "Build an environment at the runtime minimums"
+    )
+    # Run the installation portion of the workflow against a local-only package.
+    script = step.split('cat "$RUNNER_TEMP/lb.txt"\n')[1].split("uv pip check")[0]
+    project = '[project]\nname = "floor-example"\nversion = "1.0"\n'
+    (tmp_path / "pyproject.toml").write_text(
+        project
+        + '[dependency-groups]\ntest = ["floor-source-probe"]\n'
+        + '[tool.uv.sources]\nfloor-source-probe = {path = "local"}\n'
+    )
+    local = tmp_path / "local"
+    local.mkdir()
+    (local / "pyproject.toml").write_text(
+        project.replace("floor-example", "floor-source-probe")
+    )
+    (tmp_path / "lb.txt").write_text("floor-source-probe\n-e .\n")
+    bash = shutil.which("bash")
+    assert bash is not None
+    venv.EnvBuilder(with_pip=False).create(tmp_path / "env")
+    result = subprocess.run(  # noqa: S603
+        [
+            bash,
+            "-eu",
+            "-c",
+            'uv() { if [[ $1 == pip ]]; then set -- "$@" --dry-run; fi; '
+            'command uv "$@"; }\n' + script,
+        ],
+        cwd=tmp_path,
+        env=os.environ
+        | {
+            "py": str(tmp_path / "env/bin/python"),
+            "RUNNER_TEMP": str(tmp_path),
+            "UV_OFFLINE": "true",
+        },
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "floor-source-probe @ file://" in result.stderr
