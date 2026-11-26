@@ -48,9 +48,9 @@ on:
         type: string
         default: ''
       run-lower-bounds:
-        description: 'Run the tests with every runtime dependency at its declared minimum (opt-in until the fleet floors are true)'
+        description: 'Run the tests with every runtime dependency at its declared minimum'
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read

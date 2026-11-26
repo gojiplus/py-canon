@@ -9,6 +9,19 @@ not a release of its own.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-26
+
+### Changed
+
+- The reusable CI runs the lower-bounds job by default. Callers can opt out
+  with `run-lower-bounds: false`. A failing test at the declared runtime
+  minimums fails the CI gate.
+
+### Fixed
+
+- The fleet sweep preserves references from one extra to other extras of the
+  same project. It previously added a registry version to some of those
+  references, which conflicted with installing the checkout.
 - Activate the minimum-version environment before pytest so tests that call an
   installed command find the same tools as tests that import a Python module.
 

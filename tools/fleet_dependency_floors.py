@@ -133,6 +133,7 @@ def with_floor(req: Requirement, new: Version) -> str:
 def target_requirements(doc: tomlkit.TOMLDocument, floor: tuple[int, int]):
     """Yield editable requirements active on the Linux x86-64 CI target."""
     project = doc.get("project", {})
+    package = canonicalize_name(project.get("name", ""))
     groups = [("", project.get("dependencies", []))]
     groups.extend(project.get("optional-dependencies", {}).items())
     version = ".".join(map(str, floor))
@@ -152,6 +153,10 @@ def target_requirements(doc: tomlkit.TOMLDocument, floor: tuple[int, int]):
     for extra, arr in groups:
         for i, item in enumerate(arr):
             req = Requirement(item)
+            # An aggregate extra such as statqa[llm,pdf] selects extras from
+            # the checkout. A registry version would conflict with that checkout.
+            if canonicalize_name(req.name) == package:
+                continue
             if req.marker is None or req.marker.evaluate({**env, "extra": extra}):
                 yield arr, i, req
 
