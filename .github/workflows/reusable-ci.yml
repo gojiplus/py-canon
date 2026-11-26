@@ -612,11 +612,17 @@ jobs:
           cat "$RUNNER_TEMP/lb.txt"
           # A flattened requirements file loses group source overrides. In
           # fewlab, PyPI "simcheck" is a different project from the Git source.
+          selected=$(uv run --no-project --python '>=3.11' python - <<'PYTHON'
+          import tomllib
+
+          with open("pyproject.toml", "rb") as handle:
+              groups = tomllib.load(handle).get("dependency-groups", {})
+          print(" ".join(name.lower() for name in groups if name.lower() in {"dev", "test"}))
+          PYTHON
+          )
           group_args=()
-          for group in dev test; do
-            if "$py" -c 'import sys, tomllib; groups = tomllib.load(open("pyproject.toml", "rb")).get("dependency-groups", {}); sys.exit(sys.argv[1] not in {g.lower() for g in groups})' "$group"; then
-              group_args+=(--group "$group")
-            fi
+          for group in $selected; do
+            group_args+=(--group "$group")
           done
           uv pip install --python "$py" "${group_args[@]}" -r "$RUNNER_TEMP/lb.txt"
           # A minimum below what another dependency needs (fewlab's numpy 2.1

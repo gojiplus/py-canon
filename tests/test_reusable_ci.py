@@ -659,7 +659,13 @@ def test_floor_install_resolves_a_test_tool_from_its_project_source(tmp_path):
     assert bash is not None
     venv.EnvBuilder(with_pip=False).create(tmp_path / "env")
     result = subprocess.run(  # noqa: S603
-        [bash, "-eu", "-c", 'uv() { command uv "$@" --dry-run; }\n' + script],
+        [
+            bash,
+            "-eu",
+            "-c",
+            'uv() { if [[ $1 == pip ]]; then set -- "$@" --dry-run; fi; '
+            'command uv "$@"; }\n' + script,
+        ],
         cwd=tmp_path,
         env=os.environ
         | {
