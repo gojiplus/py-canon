@@ -92,3 +92,13 @@ def test_environment_lists_pins_tools_and_the_package_with_extras():
         "pytest>=8",
         "-e .[io,web]",
     ]
+
+
+def test_normalized_group_includes():
+    groups = {"Dev": [{"include-group": "Test_Tools"}], "test-tools": ["pytest-cov"]}
+    assert group_requirements({"dependency-groups": groups}) == ["pytest-cov"]
+
+
+def test_conditional_pytest_does_not_hide_fallback():
+    groups = {"test": ["pytest; python_version < '3.12'"]}
+    assert "pytest" in environment({"dependency-groups": groups}, "3.13.1")

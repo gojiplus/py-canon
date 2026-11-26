@@ -1,7 +1,7 @@
 """Pin each runtime dependency of a package to its declared minimum.
 
-The reusable CI's ``lower-bounds`` job installs these pins on top of the
-locked environment and runs the tests, which is the only check that a
+The reusable CI's ``lower-bounds`` job installs these pins in a fresh
+environment and runs the tests, which is the only check that a
 package's declared minimums are true. ``tools/fleet_dependency_floors.py``
 uses the same function, so the tool proposes what the job will test.
 
@@ -22,6 +22,7 @@ import sys
 import tomllib
 from pathlib import Path
 
+from packaging.dependency_groups import resolve_dependency_groups
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
@@ -111,23 +112,9 @@ def group_requirements(
         Requirement strings in declaration order, duplicates removed.
     """
     groups = pyproject.get("dependency-groups", {})
-    out: list[str] = []
-    seen: set[str] = set()
-
-    def visit(name: str) -> None:
-        if name in seen or name not in groups:
-            return
-        seen.add(name)
-        for item in groups[name]:
-            if isinstance(item, str):
-                if item not in out:
-                    out.append(item)
-            elif isinstance(item, dict) and "include-group" in item:
-                visit(item["include-group"])
-
-    for name in names:
-        visit(name)
-    return out
+    available = {canonicalize_name(name) for name in groups}
+    selected = [name for name in names if canonicalize_name(name) in available]
+    return list(dict.fromkeys(resolve_dependency_groups(groups, *selected)))
 
 
 def environment(pyproject: dict, python_version: str | None = None) -> list[str]:
@@ -148,7 +135,10 @@ def environment(pyproject: dict, python_version: str | None = None) -> list[str]
     extras = sorted(pyproject.get("project", {}).get("optional-dependencies", {}))
     tag = f"[{','.join(extras)}]" if extras else ""
     tools = group_requirements(pyproject)
-    if not any(canonicalize_name(Requirement(t).name) == "pytest" for t in tools):
+    if not any(
+        canonicalize_name(req.name) == "pytest" and req.marker is None
+        for req in map(Requirement, tools)
+    ):
         tools.append("pytest")
     return [*minimums(pyproject, python_version), *tools, f"-e .{tag}"]
 

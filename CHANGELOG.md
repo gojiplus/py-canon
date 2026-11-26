@@ -20,7 +20,11 @@ not a release of its own.
   mixing minimums into the lock failed 28 of 44 PRs, some for a test tool's
   needs (copier wanted platformdirs>=4.3.6) rather than the package's.
   `py-canon-minimums --environment` writes the file.
-- `tools/fleet_dependency_floors.py` resolves the runtime set at its lowest
+- Dependency groups now use the resolver shipped in packaging 26.1, including
+  normalized group names and nested includes. Conditional pytest requirements
+  still install a test runner.
+- `tools/fleet_dependency_floors.py` keeps requirements for other targets
+  intact and resolves the runtime set at its lowest
   (`uv pip compile --resolution lowest-direct`, Linux wheels only) and raises
   any minimum another dependency needs higher; rerunning replaces an open PR's
   branch instead of failing on it.

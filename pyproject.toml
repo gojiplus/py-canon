@@ -13,7 +13,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
 ]
-dependencies = ["packaging>=24.2"]
+dependencies = ["packaging>=26.1"]
 
 [project.scripts]
 py-canon-minimums = "py_canon.lower_bounds:main"
@@ -30,10 +30,10 @@ build-backend = "uv_build"
 dev = [
     "ruff>=0.16.2",
     "pyright>=1.1.390",
-    "tomlkit>=0.13",
     { include-group = "test" },
 ]
 test = [
+    "tomlkit>=0.13",
     "pytest>=8",
     "pyyaml>=6",
     "sphinx>=8",

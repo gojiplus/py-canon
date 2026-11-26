@@ -548,10 +548,11 @@ test = [
     { name = "pyyaml" },
     { name = "sphinx" },
     { name = "sphinx-copybutton" },
+    { name = "tomlkit" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "packaging", specifier = ">=24.2" }]
+requires-dist = [{ name = "packaging", specifier = ">=26.1" }]
 
 [package.metadata.requires-dev]
 dev = [
@@ -580,6 +581,7 @@ test = [
     { name = "pyyaml", specifier = ">=6" },
     { name = "sphinx", specifier = ">=8" },
     { name = "sphinx-copybutton" },
+    { name = "tomlkit", specifier = ">=0.13" },
 ]
 
 [[package]]
