@@ -657,7 +657,7 @@ def test_floor_install_resolves_a_test_tool_from_its_project_source(tmp_path):
     (tmp_path / "lb.txt").write_text("floor-source-probe\n-e .\n")
     bash = shutil.which("bash")
     assert bash is not None
-    venv.EnvBuilder(with_pip=False).create(tmp_path / "env")
+    venv.EnvBuilder(symlinks=True).create(tmp_path / "env")
     result = subprocess.run(  # noqa: S603
         [
             bash,
@@ -685,7 +685,7 @@ def test_floor_tests_find_commands_installed_in_the_environment(tmp_path):
     step = next(
         s["run"] for s in job["steps"] if s.get("name") == "Test at the minimums"
     )
-    venv.EnvBuilder(system_site_packages=True).create(tmp_path / "lb")
+    venv.EnvBuilder(symlinks=True, system_site_packages=True).create(tmp_path / "lb")
     tool = tmp_path / "lb/bin/floor-tool-probe"
     tool.write_text("#!/bin/sh\nexit 0\n")
     tool.chmod(0o755)

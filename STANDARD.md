@@ -116,9 +116,12 @@ require successful candidate CI before exposing a revision to consumers.
     body that reappears under a new name counts as a rename. The lint job
     checks out full history so the base is there.
   - **Declared lower bounds are tested.** The reusable CI's `lower-bounds` job
-    resolves every direct dependency to the lowest version its constraint
-    allows (`uv lock --resolution lowest-direct`), on the floor Python, and
-    runs the suite. A floor that fails there is raised to one that works.
+    runs by default. It pins direct runtime dependencies and extras at their
+    declared minimums where an exact version can be read. It installs the
+    checkout and its dev and test groups in a fresh environment, checks that
+    the installed versions are compatible, and runs pytest. A caller can set
+    `run-lower-bounds: false` to opt out. The job respects an explicit Python
+    selection and otherwise uses the lowest supported Python minor version.
     NumPy's legacy global random state (`np.random.seed`, `np.random.rand`) is
     banned by ruff's `NPY` rules, in tests too: a test that seeds global state
     changes every test that runs after it.

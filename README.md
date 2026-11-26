@@ -50,6 +50,10 @@ uvx preen adopt          # retrofit an existing package
 uvx preen new mypackage  # scaffold a new one
 ```
 
+The shared CI runs pytest with the lockfile and again in a fresh environment
+with the declared runtime minimums. The second run includes every optional
+extra. The workflow input `run-lower-bounds` defaults to `true`.
+
 ## Versioning
 
 `uv version X.Y.Z` updates the `py-canon` package version. A matching
